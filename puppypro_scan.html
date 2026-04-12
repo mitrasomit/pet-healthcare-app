@@ -1,0 +1,2335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+<title>Puppy Pro — AI Scan</title>
+<!--
+  DEPLOY AS STANDALONE:
+  1. Netlify Drop → app.netlify.com/drop  (drag file, instant live URL)
+  2. GitHub Pages → upload as index.html → Settings → Pages → Deploy
+  Standalone: prompts user for Anthropic API key (free at console.anthropic.com)
+  Inside Claude.ai: works automatically, no key needed.
+-->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Lora:wght@600;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --serif:'Lora',Georgia,serif;
+  --sans:'DM Sans',system-ui,sans-serif;
+  --terra:#C4714A;--terra-d:#9E4E28;--terra-a:rgba(196,113,74,.18);
+  --sage:#5D9469;--amber:#A07020;--violet:#6A5AAA;
+  --bg:#FAF7F2;--s0:#fff;--s1:#F6F0E8;--s2:#EDE5D8;
+  --bord:rgba(44,36,22,.09);--bords:rgba(44,36,22,.17);
+  --text:#2C2010;--sub:#7A6A58;--dim:#B0A090;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased;min-height:100vh}
+::placeholder{color:var(--dim)}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--terra-a);border-radius:2px}
+button{font-family:var(--sans);cursor:pointer;-webkit-tap-highlight-color:transparent}
+input,textarea{font-family:var(--sans)}
+
+/* ── Layout ── */
+.wrap{max-width:640px;margin:0 auto;min-height:100vh;background:var(--bg)}
+.page{padding:14px 15px 100px;display:flex;flex-direction:column;gap:14px}
+
+/* ── Header ── */
+.hdr{
+  padding:13px 18px;background:var(--s0);border-bottom:1px solid var(--bord);
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:80;box-shadow:0 1px 12px rgba(44,36,22,.06);
+}
+.logo{width:40px;height:40px;border-radius:11px;background:linear-gradient(145deg,#C4714A,#9E4E28);display:flex;align-items:center;justify-content:center;font-size:21px;box-shadow:0 3px 10px rgba(196,113,74,.3)}
+
+/* ── Cards ── */
+.card{background:var(--s0);border:1px solid var(--bord);border-radius:18px;overflow:hidden;box-shadow:0 2px 18px rgba(44,36,22,.06)}
+.card-warm{background:linear-gradient(145deg,#FFFAF5,#FFF1E5);border:1px solid var(--terra-a);border-radius:18px;overflow:hidden;box-shadow:0 2px 18px rgba(44,36,22,.06)}
+
+/* ── Upload zone ── */
+.zone{border:2px dashed var(--bords);border-radius:14px;min-height:156px;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;padding:14px;background:var(--s1);cursor:pointer;transition:border-color .2s,background .2s}
+.zone:hover,.zone.has{border-color:var(--terra);background:#FFF8F4}
+.zone img{border-radius:9px;object-fit:cover}
+
+/* ── Buttons ── */
+.btn-scan{width:100%;padding:15px;border:none;border-radius:13px;font-size:14.5px;font-weight:700;color:#fff;background:var(--terra);box-shadow:0 4px 18px rgba(196,113,74,.3);transition:all .18s}
+.btn-scan:hover:not(:disabled){background:var(--terra-d);transform:translateY(-1px)}
+.btn-scan:disabled{background:var(--s2);color:var(--dim);box-shadow:none;cursor:not-allowed}
+.btn-again{display:flex;align-items:center;gap:7px;padding:9px 18px;border:1px solid var(--bords);border-radius:20px;background:var(--s0);color:var(--sub);font-size:12.5px;font-weight:600;transition:all .18s;width:fit-content}
+.btn-again:hover{border-color:var(--terra);color:var(--terra);background:#FFF8F4}
+
+/* ── Pill ── */
+.pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.04em}
+
+/* ── Breed card internals ── */
+.sec-lbl{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:var(--dim);padding:9px 16px 7px;display:block;border-top:1px solid var(--bord)}
+.triage-strip{padding:12px 16px;display:flex;align-items:flex-start;gap:11px}
+.pet-thumb{width:76px;height:76px;border-radius:11px;flex-shrink:0;object-fit:cover;border:1px solid var(--bord)}
+.pet-thumb-ph{width:76px;height:76px;border-radius:11px;flex-shrink:0;background:var(--s1);border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;font-size:28px}
+.glance-grid{display:grid;grid-template-columns:repeat(3,1fr)}
+.glance-cell{padding:9px 12px;border-right:1px solid var(--bord);border-bottom:1px solid var(--bord)}
+.glance-cell:nth-child(3n){border-right:none}
+.glance-cell:nth-last-child(-n+3){border-bottom:none}
+.glance-lbl{font-size:10px;color:var(--dim);margin-bottom:3px}
+.glance-val{font-size:12.5px;font-weight:700}
+.insight-row{display:flex;gap:10px;align-items:baseline;padding:7px 16px;border-top:1px solid var(--bord)}
+.insight-key{font-size:10.5px;color:var(--dim);min-width:88px;flex-shrink:0}
+.insight-val{font-size:12px;color:var(--sub);line-height:1.5}
+
+/* ── Health snapshot ── */
+.health-block{padding:12px 16px;border-top:1px solid var(--bord)}
+.health-block-lbl{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.16em;color:var(--terra);margin-bottom:8px}
+.dot-row{font-size:11.5px;color:var(--sub);padding:5px 0;border-bottom:1px solid var(--bord);line-height:1.5}
+.dot-row:last-child{border-bottom:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+
+/* ── Error ── */
+.err{padding:11px 13px;background:rgba(196,113,74,.08);border:1px solid rgba(196,113,74,.26);border-radius:11px;font-size:12px;color:#B85C35;line-height:1.6;margin-top:10px}
+
+/* ── Loading ── */
+.load-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px 24px;gap:18px;text-align:center;min-height:55vh}
+.spinner{width:48px;height:48px;border-radius:50%;border:3px solid var(--s2);border-top-color:var(--terra);animation:spin 1s linear infinite}
+.spinner-sm{width:22px;height:22px;border-radius:50%;border:2.5px solid var(--s2);border-top-color:var(--terra);animation:spin 1s linear infinite;flex-shrink:0}
+
+/* ── API key bar ── */
+.key-bar{padding:10px 14px;background:rgba(160,112,32,.08);border:1px solid rgba(160,112,32,.25);border-radius:11px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.key-input{flex:1;min-width:160px;padding:7px 11px;border:1px solid var(--bords);border-radius:9px;background:var(--s0);font-size:12px;color:var(--text);outline:none}
+.key-save{padding:7px 14px;border:none;border-radius:9px;background:var(--terra);color:#fff;font-size:12px;font-weight:700}
+
+/* ── Vaccine tab ── */
+.vacc-header{display:flex;justify-content:space-between;align-items:center;padding:15px 16px;border-bottom:1px solid var(--bord);background:linear-gradient(145deg,#FFFAF5,#FFF1E5)}
+.vacc-timeline-row{display:flex;gap:13px;padding:12px 0;border-bottom:1px solid var(--bord)}
+.vacc-timeline-row:last-child{border-bottom:none}
+.vacc-num{width:28px;height:28px;border-radius:50%;background:var(--s1);border:1px solid var(--terra-a);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--terra)}
+
+/* ── More tab inner switcher ── */
+.inner-tabs{display:flex;gap:0;background:var(--s2);border-radius:11px;padding:3px;margin-bottom:14px}
+.inner-tab{flex:1;padding:8px 10px;border-radius:9px;text-align:center;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--dim);transition:all .18s;cursor:pointer}
+.inner-tab.active{background:var(--s0);color:var(--terra);box-shadow:0 1px 6px rgba(44,36,22,.08)}
+
+/* ── Compliance ── */
+.comply-region{padding:11px 12px;background:var(--s1);border-radius:11px;border:1px solid var(--bord);margin-bottom:9px}
+.comply-region:last-child{margin-bottom:0}
+
+/* ── Chat ── */
+.chat-wrap{display:flex;flex-direction:column;height:calc(100vh - 200px);min-height:360px}
+.chat-msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:4px 0 12px}
+.bubble-ai{max-width:82%;padding:10px 14px;font-size:13px;line-height:1.6;border-radius:16px 16px 16px 4px;background:var(--s0);color:var(--sub);border:1px solid var(--bord)}
+.bubble-user{max-width:82%;padding:10px 14px;font-size:13px;line-height:1.6;border-radius:16px 16px 4px 16px;background:var(--terra);color:#fff}
+.chat-input-row{display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--bord)}
+.chat-input{flex:1;padding:11px 14px;background:var(--s0);border:1px solid var(--bords);border-radius:12px;color:var(--text);font-size:13px;outline:none;resize:none}
+
+/* ── Coming soon ── */
+.coming-soon{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 24px;gap:14px}
+
+/* ── Bottom nav ── */
+.bottom-nav{
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:640px;
+  background:var(--s0);border-top:1px solid var(--bord);
+  display:flex;padding:8px 0 max(10px,env(safe-area-inset-bottom));
+  z-index:90;box-shadow:0 -2px 14px rgba(44,36,22,.07);
+}
+.nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;padding:5px 0;position:relative}
+.nav-icon{font-size:21px;transition:filter .2s}
+.nav-icon.dim{filter:grayscale(.7) opacity(.5)}
+.nav-lbl{font-size:10.5px;font-weight:700;letter-spacing:.02em;transition:color .2s}
+.nav-active-bar{position:absolute;bottom:0;width:22px;height:2.5px;border-radius:2px;background:var(--terra)}
+
+/* ── Meal Plan ── */
+.mp-field-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);margin-bottom:6px}
+.mp-input{width:100%;padding:9px 12px;border:1px solid var(--bords);border-radius:9px;font-size:13px;color:var(--text);background:var(--s1);outline:none;box-sizing:border-box;font-family:var(--sans);transition:border-color .18s}
+.mp-input:focus{border-color:var(--terra)}
+.mp-act-btn{flex:1;padding:10px 4px;border-radius:10px;border:1px solid var(--bords);text-align:center;cursor:pointer;font-size:11px;font-weight:600;color:var(--sub);background:var(--s1);transition:all .15s}
+.mp-act-btn.active{border:1.5px solid var(--terra);background:var(--terra-a);color:var(--terra);font-weight:700}
+.mp-pref-btn{flex:1;padding:11px 8px;border-radius:12px;border:1px solid var(--bords);text-align:center;cursor:pointer;transition:all .15s;background:var(--s1)}
+.mp-pref-btn.active-veg{border:1.5px solid var(--sage);background:rgba(93,148,105,.08)}
+.mp-pref-btn.active-nveg{border:1.5px solid var(--terra);background:var(--terra-a)}
+.mp-pm-btn{padding:8px 13px;border-radius:10px;border:1px solid var(--bords);background:var(--s1);font-size:12px;font-weight:600;color:var(--sub);cursor:pointer;transition:all .15s}
+.mp-pm-btn.active{border:1.5px solid var(--terra);background:var(--terra-a);color:var(--terra);font-weight:700}
+.mp-section{padding:13px 15px;border-bottom:1px solid var(--bord)}
+.mp-section:last-child{border-bottom:none}
+
+/* ── Pet World map ── */
+.pw-map{position:relative;height:220px;background:#f5f3ee;overflow:hidden;flex-shrink:0}
+.pw-map-block{position:absolute;background:#e0dbd3;border-radius:2px}
+.pw-map-road-h{position:absolute;background:#fff;height:4px;opacity:.9}
+.pw-map-road-v{position:absolute;background:#fff;width:4px;opacity:.9}
+.pw-map-road-main-h{position:absolute;background:#f0e8d8;height:6px;border-top:0.5px solid #ddd;border-bottom:0.5px solid #ddd}
+.pw-map-road-main-v{position:absolute;background:#f0e8d8;width:6px;border-left:0.5px solid #ddd;border-right:0.5px solid #ddd}
+.pw-map-water{position:absolute;right:0;top:0;width:20%;height:100%;background:#c8dce8}
+.pw-map-park{position:absolute;background:#d4e8c8;border-radius:5px}
+.pw-pin{position:absolute;transform:translate(-50%,-100%);cursor:pointer;z-index:10;text-align:center}
+.pw-pin-bubble{color:#fff;border-radius:20px;padding:3px 9px;font-size:10px;font-weight:600;white-space:nowrap}
+.pw-pin-tail{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;margin:0 auto}
+.pw-pin-locked .pw-pin-bubble{background:#888!important}
+.pw-pin-locked .pw-pin-tail{border-top-color:#888!important}
+.pw-list-row{display:flex;align-items:center;gap:10px;padding:10px 15px;border-bottom:1px solid var(--bord);cursor:pointer}
+.pw-list-row:last-child{border-bottom:none}
+.pw-locked-row{position:relative;overflow:hidden;border-bottom:1px solid var(--bord)}
+.pw-locked-row:last-child{border-bottom:none}
+.pw-locked-overlay{position:absolute;inset:0;background:rgba(250,247,242,.82);display:flex;align-items:center;justify-content:center;gap:10px;z-index:2}
+.pw-profile-sheet{position:absolute;bottom:0;left:0;right:0;background:var(--s0);border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(44,36,22,.15);z-index:200;max-height:90%;overflow-y:auto}
+.pw-profile-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.35);z-index:199}
+.pw-city-chip{padding:5px 13px;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--bord);background:var(--s0);color:var(--sub);white-space:nowrap;flex-shrink:0;transition:all .18s}
+.pw-city-chip.active{background:var(--terra);color:#fff;border-color:var(--terra)}
+
+/* ── Animations ── */
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.rise{animation:rise .32s ease forwards}
+
+@media(min-width:520px){.wrap{box-shadow:0 8px 40px rgba(44,36,22,.12)}.bottom-nav{border-radius:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ══ HEADER ══ -->
+  <header class="hdr">
+    <div style="display:flex;align-items:center;gap:11px">
+      <div class="logo">🐾</div>
+      <div>
+        <div style="font-family:var(--serif);font-size:18px;font-weight:800;color:var(--terra);line-height:1">Puppy Pro</div>
+        <div style="font-size:8.5px;color:var(--dim);letter-spacing:.17em;text-transform:uppercase;margin-top:1px">AI Health Scan</div>
+      </div>
+    </div>
+    <div id="hdr-right" style="display:none;align-items:center;gap:10px">
+      <div style="text-align:right">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:2px">Health Score</div>
+        <div id="hdr-breed" style="font-size:10px;color:var(--sub)"></div>
+        <div id="hdr-meta"  style="font-size:9px;color:var(--dim)"></div>
+      </div>
+      <!-- Score ring -->
+      <div style="position:relative;width:50px;height:50px;flex-shrink:0">
+        <svg width="50" height="50" viewBox="0 0 50 50" style="display:block">
+          <circle cx="25" cy="25" r="21" fill="none" stroke="var(--s2)" stroke-width="4.5"/>
+          <circle id="hs-ring" cx="25" cy="25" r="21" fill="none" stroke="var(--amber)"
+            stroke-width="4.5" stroke-linecap="round"
+            stroke-dasharray="131.95" stroke-dashoffset="131.95"
+            transform="rotate(-90 25 25)"
+            style="transition:stroke-dashoffset .6s ease,stroke .4s ease"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0">
+          <span id="hs-num" style="font-size:15px;font-weight:800;line-height:1;color:var(--amber);transition:color .4s">—</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ══ PAGE BODY ══ -->
+  <div class="page" id="page-body">
+
+    <!-- API KEY BAR — standalone only -->
+    <div id="key-section" style="display:none">
+      <div class="key-bar">
+        <span style="font-size:11px;color:var(--amber);font-weight:600">🔑 Anthropic API key required</span>
+        <input id="key-input" class="key-input" type="password" placeholder="sk-ant-…" autocomplete="off"/>
+        <button class="key-save" onclick="saveKey()">Save</button>
+      </div>
+      <div style="font-size:10px;color:var(--dim);padding:4px 2px 0">
+        Stored only in your browser · Free key at
+        <a href="https://console.anthropic.com" target="_blank" style="color:var(--terra)">console.anthropic.com</a>
+      </div>
+    </div>
+
+    <!-- ── UPLOAD CARD ── -->
+    <div id="upload-card" class="card" style="padding:17px">
+      <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:var(--terra);display:flex;align-items:center;gap:6px;margin-bottom:13px">
+        <span>📷</span> Upload Puppy Photo
+      </div>
+      <div id="zone" class="zone"
+           onclick="document.getElementById('file-in').click()"
+           ondragover="event.preventDefault()"
+           ondrop="handleDrop(event)">
+        <div id="zone-ph" style="text-align:center">
+          <div style="font-size:36px;margin-bottom:10px">📷</div>
+          <div style="font-size:12.5px;color:var(--sub);font-weight:600">Tap or drag up to 4 photos</div>
+          <div style="font-size:10.5px;color:var(--dim);margin-top:5px">AI detects breed automatically 🐾</div>
+        </div>
+        <div id="zone-thumbs" style="display:none;flex-wrap:wrap;gap:8px;width:100%;justify-content:center"></div>
+      </div>
+      <input id="file-in" type="file" multiple accept="image/*" style="display:none" onchange="handleFiles(this.files)"/>
+      <div id="photo-info" style="display:none;justify-content:space-between;align-items:center;margin-top:8px">
+        <span id="photo-count" style="font-size:11px;color:var(--sage);font-weight:600"></span>
+        <button onclick="clearPhotos()" style="background:none;border:none;font-size:11px;color:var(--dim)">Remove</button>
+      </div>
+      <!-- Pet Age + Weight — display only, not used in scan -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:15px">
+        <div>
+          <label style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:var(--dim);display:block;margin-bottom:6px">Pet Age</label>
+          <input type="text" id="pet-age-input" placeholder="e.g. 2 years" style="width:100%;padding:10px 13px;background:var(--s1);border:1px solid var(--bords);border-radius:11px;color:var(--text);font-size:13px;outline:none;transition:border-color .2s" onfocus="this.style.borderColor=&apos;var(--terra)&apos;" onblur="this.style.borderColor=&apos;var(--bords)&apos;"/>
+        </div>
+        <div>
+          <label style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:var(--dim);display:block;margin-bottom:6px">Weight</label>
+          <input type="text" id="pet-weight-input" placeholder="e.g. 28 kg" style="width:100%;padding:10px 13px;background:var(--s1);border:1px solid var(--bords);border-radius:11px;color:var(--text);font-size:13px;outline:none;transition:border-color .2s" onfocus="this.style.borderColor=&apos;var(--terra)&apos;" onblur="this.style.borderColor=&apos;var(--bords)&apos;"/>
+        </div>
+      </div>
+
+      <button id="scan-btn" class="btn-scan" onclick="runScan()" disabled style="margin-top:13px">
+        🔬 Run Full Intelligence Scan
+      </button>
+      <div id="err-box" class="err" style="display:none"></div>
+    </div>
+
+    <!-- LOADING -->
+    <div id="loading-box" style="display:none">
+      <div class="load-wrap">
+        <div style="font-size:54px">🐾</div>
+        <div class="spinner"></div>
+        <div>
+          <div style="font-family:var(--serif);font-size:22px;font-weight:700;color:var(--terra);margin-bottom:6px">Scanning…</div>
+          <div style="font-size:12px;color:var(--sub);line-height:1.8">
+            Analysing breed, health &amp; traits.<br>
+            <strong style="color:var(--terra)">Usually 10–20 seconds.</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB CONTENT PANELS ── -->
+    <div id="panel-scan"    style="display:none"></div>
+    <div id="panel-mealplan" style="display:none"></div>
+    <div id="panel-vaccine" style="display:none"></div>
+    <div id="panel-explore" style="display:none"></div>
+    <div id="panel-askvet"  style="display:none"></div>
+    <div id="panel-more"    style="display:none"></div>
+
+  </div><!-- /page -->
+
+  <!-- ══ BOTTOM NAV — shown only after scan ══ -->
+  <nav class="bottom-nav" id="bottom-nav" style="display:none">
+    <button class="nav-btn" id="nb-explore" onclick="switchTab('explore')">
+      <span class="nav-icon dim" id="ni-explore">🧭</span>
+      <span class="nav-lbl" id="nl-explore" style="color:var(--dim)">Explore</span>
+    </button>
+    <button class="nav-btn" id="nb-vaccine" onclick="switchTab('vaccine')">
+      <span class="nav-icon dim" id="ni-vaccine">💉</span>
+      <span class="nav-lbl" id="nl-vaccine" style="color:var(--dim)">Vaccines</span>
+    </button>
+    <button class="nav-btn" id="nb-scan"    onclick="switchTab('scan')">
+      <span class="nav-icon dim" id="ni-scan">🔬</span>
+      <span class="nav-lbl" id="nl-scan" style="color:var(--dim)">Scan</span>
+    </button>
+    <button class="nav-btn" id="nb-askvet"  onclick="switchTab('askvet')">
+      <span class="nav-icon dim" id="ni-askvet">💬</span>
+      <span class="nav-lbl" id="nl-askvet" style="color:var(--dim)">Ask Vet</span>
+    </button>
+    <button class="nav-btn" id="nb-more"    onclick="switchTab('more')">
+      <span class="nav-icon dim" id="ni-more">☰</span>
+      <span class="nav-lbl" id="nl-more" style="color:var(--dim)">More</span>
+    </button>
+  </nav>
+
+</div><!-- /wrap -->
+
+<script>
+// ─── ENVIRONMENT ──────────────────────────────────────────────────────────────
+let IS_ARTIFACT = false;
+try { IS_ARTIFACT = (window.self !== window.top); } catch(e){ IS_ARTIFACT = true; }
+
+// ─── APP STATE ────────────────────────────────────────────────────────────────
+let imgData          = [];
+let firstPhotoDataUrl= null;
+let scanData         = null;   // main scan result
+
+// ─── HEALTH SCORE ENGINE ──────────────────────────────────────────────────────
+// Score is displayed 0-100 but earned across 3 independent buckets:
+//   _hs_scan  : from AI scan result, mapped to max 55 pts
+//               (so even a perfect AI score of 100 → 55 on screen)
+//   _hs_hc    : health check ticks, +2 per checkbox (20 checks × 2 = max 40 pts)
+//   _hs_vacc  : vaccines marked given, +8 due / +5 upcoming
+// Display = min(100, _hs_scan + _hs_hc + _hs_vacc)
+// This ensures score can never reach 100 from scan alone — daily actions matter.
+
+let _hs_scan = 0;   // set once after scan
+let _hs_hc   = 0;   // incremented by health check ticks
+let _hs_vacc = 0;   // incremented by vaccine marks
+
+function hsDisplay(){ return Math.min(100, Math.round(_hs_scan + _hs_hc + _hs_vacc)); }
+function hsColor(s){ return s>=80?'var(--sage)':s>=60?'var(--amber)':'#B85C35'; }
+
+function hsUpdate(){
+  const ring = document.getElementById('hs-ring');
+  const num  = document.getElementById('hs-num');
+  if(!ring||!num) return;
+  const s   = hsDisplay();
+  const col = hsColor(s);
+  // circumference = 2π×21 ≈ 131.95; offset = circ*(1-s/100)
+  ring.style.strokeDashoffset = (131.95*(1-s/100)).toFixed(2);
+  ring.style.stroke = col;
+  num.textContent = s;
+  num.style.color = col;
+}
+
+function hsFlash(pts, col){
+  let el = document.getElementById('hs-flash');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'hs-flash';
+    el.style.cssText = 'position:fixed;top:78px;left:50%;transform:translateX(-50%);color:#fff;font-size:12px;font-weight:700;padding:8px 16px;border-radius:18px;z-index:9999;box-shadow:0 3px 14px rgba(44,36,22,.25);pointer-events:none;transition:opacity .4s';
+    document.body.appendChild(el);
+  }
+  el.style.background = col||'var(--sage)';
+  el.textContent = (pts>0?'+':'')+pts+' Health Score';
+  el.style.opacity = '1';
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>{ el.style.opacity='0'; setTimeout(()=>el.style.display='none',420); },1700);
+}
+let vaccineData      = null;   // genVaccine result (cached)
+let vaccineLoaded    = false;
+let activeTab        = 'scan';
+let moreInnerTab     = 'nearby';
+let chatHistory      = [];
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+(function init(){
+  if(!IS_ARTIFACT && !localStorage.getItem('ppa_key')){
+    document.getElementById('key-section').style.display = 'block';
+    document.getElementById('key-input').addEventListener('keydown', e=>{
+      if(e.key==='Enter') saveKey();
+    });
+  }
+  refreshBtn();
+})();
+
+function saveKey(){
+  const k = document.getElementById('key-input').value.trim();
+  if(!k) return;
+  localStorage.setItem('ppa_key', k);
+  document.getElementById('key-section').style.display = 'none';
+  refreshBtn();
+}
+function getKey(){ return localStorage.getItem('ppa_key') || ''; }
+function refreshBtn(){
+  document.getElementById('scan-btn').disabled =
+    !(imgData.length > 0 && (IS_ARTIFACT || !!getKey()));
+}
+
+// ─── FILES ────────────────────────────────────────────────────────────────────
+function handleDrop(e){ e.preventDefault(); handleFiles(e.dataTransfer.files); }
+function handleFiles(files){
+  imgData = []; firstPhotoDataUrl = null;
+  const arr = Array.from(files).slice(0,4);
+  let done = 0;
+  arr.forEach(f=>{
+    const r = new FileReader();
+    r.onloadend = ()=>{
+      const b64 = r.result.split(',')[1];
+      let mime = 'image/jpeg';
+      if(b64.startsWith('iVBOR')) mime='image/png';
+      else if(b64.startsWith('R0lG')) mime='image/gif';
+      else if(b64.startsWith('UklG')) mime='image/webp';
+      imgData.push({b64,mime,dataUrl:r.result});
+      if(++done===arr.length){ firstPhotoDataUrl=imgData[0].dataUrl; renderThumbs(); }
+    };
+    r.readAsDataURL(f);
+  });
+}
+function renderThumbs(){
+  const n=imgData.length;
+  document.getElementById('zone-ph').style.display='none';
+  const th=document.getElementById('zone-thumbs');
+  th.innerHTML=''; th.style.display='flex';
+  imgData.forEach(img=>{
+    const el=document.createElement('img');
+    el.src=img.dataUrl;
+    el.style.cssText=`width:${n>1?'78px':'100%'};height:${n>1?'78px':'148px'};object-fit:cover;border-radius:9px`;
+    th.appendChild(el);
+  });
+  document.getElementById('zone').classList.add('has');
+  document.getElementById('photo-info').style.display='flex';
+  document.getElementById('photo-count').textContent=`✓ ${n} photo${n>1?'s':''} ready`;
+  refreshBtn();
+}
+function clearPhotos(){
+  imgData=[]; firstPhotoDataUrl=null;
+  document.getElementById('zone').classList.remove('has');
+  document.getElementById('zone-ph').style.display='block';
+  document.getElementById('zone-thumbs').style.display='none';
+  document.getElementById('zone-thumbs').innerHTML='';
+  document.getElementById('photo-info').style.display='none';
+  refreshBtn();
+}
+
+// ─── SCAN AGAIN ───────────────────────────────────────────────────────────────
+function scanAgain(){
+  scanData=null; vaccineData=null; vaccineLoaded=false;
+  chatHistory=[];
+  document.getElementById('panel-scan').style.display='none';
+  document.getElementById('panel-scan').innerHTML='';
+  document.getElementById('bottom-nav').style.display='none';
+  document.getElementById('hdr-right').style.display='none';
+  document.getElementById('upload-card').style.display='block';
+  clearPhotos();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ─── API HELPERS ──────────────────────────────────────────────────────────────
+function fetchWithTimeout(url,opts,ms){
+  const t=new Promise((_,rej)=>setTimeout(()=>rej(new Error('Request timed out. Please try again.')),ms));
+  return Promise.race([fetch(url,opts),t]);
+}
+async function callClaude(messages,system,maxTokens=1800){
+  const headers={'Content-Type':'application/json'};
+  if(!IS_ARTIFACT){
+    headers['x-api-key']=getKey();
+    headers['anthropic-version']='2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access']='true';
+  }
+  const res=await fetchWithTimeout('https://api.anthropic.com/v1/messages',{
+    method:'POST', headers,
+    body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:maxTokens,system,messages})
+  },90000);
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.error?.message||`API error ${res.status}`);
+  return data.content[0].text;
+}
+function parseJSON(raw){
+  const c=raw.replace(/```json|```/g,'').trim();
+  try{return JSON.parse(c);}catch{
+    const lb=c.lastIndexOf('}');
+    if(lb>0) try{return JSON.parse(c.slice(0,lb+1));}catch{}
+    throw new Error('Could not parse AI response — please try again.');
+  }
+}
+
+// ─── MAIN SCAN ────────────────────────────────────────────────────────────────
+async function runScan(){
+  if(!imgData.length) return;
+  if(!IS_ARTIFACT&&!getKey()){showErr('Please save your API key first.');return;}
+  const btn=document.getElementById('scan-btn');
+  btn.disabled=true; btn.textContent='⏳ Scanning…';
+  document.getElementById('loading-box').style.display='block';
+  document.getElementById('upload-card').style.display='none';
+  document.getElementById('err-box').style.display='none';
+  try{
+    const parts=imgData.map(img=>({type:'image',source:{type:'base64',media_type:img.mime,data:img.b64}}));
+    parts.push({type:'text',text:`Analyze this dog/puppy image carefully. Return ONLY a single valid JSON object. No markdown, no prose, no text outside the JSON. Strings ≤65 chars.
+
+{
+  "breed":"string","confidence":88,"estimatedAge":"string",
+  "triage":{"level":"Home Care","reason":"string"},
+  "visualHealth":"string","coat":"string","size":"string","temperamentClues":"string",
+  "k9":{"verdict":"Eligible","reason":"string"},
+  "showDog":{"verdict":"Show Quality","reason":"string"},
+  "homeRemedy":["string","string","string"],
+  "energyLevel":"High","beginnerFriendly":"Yes","monthlyCareCost":"string",
+  "intelligenceRating":"High","hypoallergenic":false,"goodWithKids":true,
+  "funFact":"string","idealOwner":"string","bestWeather":"string",
+  "foodEat":["string","string","string","string"],
+  "foodAvoid":["string","string","string","string"]
+}
+k9.verdict→Eligible|Borderline|Not Suited
+showDog.verdict→Champion Prospect|Show Quality|Pet Quality
+triage.level→Home Care|Tele-consult|Emergency
+energyLevel→Low|Medium|High
+beginnerFriendly→Yes|With Training|No
+intelligenceRating→Low|Average|High|Very High
+bestWeather must include temperature range e.g. "Temperate, 10–25°C"`});
+    const raw=await callClaude([{role:'user',content:parts}],
+      'You are a certified canine veterinary AI. Output ONLY valid JSON. No markdown. bestWeather must include a temperature range. Strings under 65 chars.');
+    scanData=parseJSON(raw);
+    document.getElementById('loading-box').style.display='none';
+    document.getElementById('hdr-breed').textContent=scanData.breed;
+    document.getElementById('hdr-meta').textContent=`${scanData.estimatedAge} · ${scanData.size}`;
+    document.getElementById('hdr-right').style.display='flex';
+    // Set base health score from scan data
+    // Map AI score (0-100) to max 55 pts so daily actions are always meaningful
+    const rawScore = typeof scanData.score==='number' ? Math.min(100,Math.max(0,scanData.score)) : 72;
+    _hs_scan = Math.round(rawScore * 0.55);
+    _hs_hc   = 0;
+    _hs_vacc = 0;
+    hsUpdate();
+    document.getElementById('bottom-nav').style.display='flex';
+    renderScanPanel();
+    initHealthChecks();
+    switchTab('scan');
+  }catch(e){
+    document.getElementById('loading-box').style.display='none';
+    document.getElementById('upload-card').style.display='block';
+    showErr(e.message);
+    btn.disabled=false; btn.textContent='🔬 Run Full Intelligence Scan';
+    refreshBtn();
+  }
+}
+
+function showErr(msg){
+  const eb=document.getElementById('err-box');
+  eb.textContent='⚠ '+msg; eb.style.display='block';
+}
+
+// ─── TAB SWITCHING ────────────────────────────────────────────────────────────
+const TABS=['scan','vaccine','explore','askvet','more'];
+function switchTab(tab){
+  activeTab=tab;
+  // hide all panels
+  TABS.forEach(t=>{
+    document.getElementById('panel-'+t).style.display='none';
+    document.getElementById('ni-'+t).classList.add('dim');
+    document.getElementById('nl-'+t).style.color='var(--dim)';
+    const bar=document.getElementById('nb-'+t).querySelector('.nav-active-bar');
+    if(bar) bar.remove();
+  });
+  // activate selected
+  const panel=document.getElementById('panel-'+tab);
+  panel.style.display='block';
+  document.getElementById('ni-'+tab).classList.remove('dim');
+  document.getElementById('nl-'+tab).style.color='var(--terra)';
+  const activeBtn=document.getElementById('nb-'+tab);
+  const bar=document.createElement('div');
+  bar.className='nav-active-bar';
+  activeBtn.appendChild(bar);
+
+  // lazy load panels
+  if(tab==='vaccine') renderVaccinePanel();
+  if(tab==='explore') renderExplorePanel();
+  if(tab==='askvet')  renderAskVetPanel();
+  if(tab==='more')    renderMorePanel();
+
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ─── COLOUR HELPERS ───────────────────────────────────────────────────────────
+const TC  = l=>({Emergency:'#B85C35','Tele-consult':'#7A5010','Home Care':'#3E7A4A'})[l]||'var(--sub)';
+const TBg = l=>({Emergency:'rgba(196,113,74,.09)','Tele-consult':'rgba(160,112,32,.08)','Home Care':'rgba(93,148,105,.08)'})[l]||'var(--s1)';
+const TBd = l=>({Emergency:'rgba(196,113,74,.3)','Tele-consult':'rgba(160,112,32,.25)','Home Care':'rgba(93,148,105,.25)'})[l]||'var(--bord)';
+const TIc = l=>({Emergency:'🚨','Tele-consult':'📞','Home Care':'🏠'})[l]||'🐾';
+const riskCol=r=>({Low:'#5D9469',Moderate:'#A07020',High:'#C4714A','Very High':'#B85C35'})[r]||'var(--sub)';
+
+function pill(t,c){return `<span class="pill" style="background:${c}18;color:${c};border:1px solid ${c}28">${esc(t)}</span>`;}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ─── RENDER: SCAN PANEL ───────────────────────────────────────────────────────
+function renderScanPanel(){
+  const d=scanData;
+  const tl=d.triage?.level||'Home Care';
+
+  // Training ease derived from beginnerFriendly
+  const trainingMap={'Yes':'Easy','With Training':'Moderate','No':'Challenging'};
+  const trainingVal=trainingMap[d.beginnerFriendly]||d.beginnerFriendly;
+  const trainingCol=d.beginnerFriendly==='Yes'?'var(--sage)':d.beginnerFriendly==='No'?'#B85C35':'var(--amber)';
+
+  const glance=[
+    {l:'With kids',      v:d.goodWithKids?'Great':'Caution', c:d.goodWithKids?'var(--sage)':'#B85C35'},
+    {l:'Training ease',  v:trainingVal,                      c:trainingCol},
+    {l:'Intelligence',   v:d.intelligenceRating,             c:'var(--violet)'},
+    {l:'Hypoallergenic', v:d.hypoallergenic?'Yes':'No',      c:d.hypoallergenic?'var(--sage)':'#B85C35'},
+    {l:'Best weather',   v:d.bestWeather||'Temperate',       c:'var(--sub)'},
+    {l:'Energy level',   v:d.energyLevel,                   c:d.energyLevel==='High'?'var(--terra)':d.energyLevel==='Low'?'var(--sage)':'var(--amber)'},
+  ];
+  const glanceHtml=glance.map(it=>`
+    <div class="glance-cell">
+      <div class="glance-lbl">${it.l}</div>
+      <div class="glance-val" style="color:${it.c}">${esc(it.v)}</div>
+    </div>`).join('');
+
+  const photoHtml=firstPhotoDataUrl
+    ?`<img class="pet-thumb" src="${firstPhotoDataUrl}" alt="Pet"/>`
+    :`<div class="pet-thumb-ph">🐾</div>`;
+
+  // Food rows builder for nutrition guide
+  const foodRow=(f,c)=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:8px;background:${c}0d;border:0.5px solid ${c}33;margin-bottom:6px"><div style="width:5px;height:5px;border-radius:50%;background:${c};flex-shrink:0"></div><span style="font-size:11.5px;color:${c}">${esc(f)}</span></div>`;
+  const eatRows  =(d.foodEat   ||[]).map(f=>foodRow(f,'#5D9469')).join('');
+  const avoidRows=(d.foodAvoid ||[]).map(f=>foodRow(f,'#B85C35')).join('');
+
+  document.getElementById('panel-scan').innerHTML=`
+
+    <!-- Scan Again -->
+    <button class="btn-again rise" onclick="scanAgain()">
+      <span style="font-size:14px">←</span> Scan Another Dog
+    </button>
+
+    <!-- ══ BREED IDENTITY CARD ══ -->
+    <div class="card rise">
+
+      <!-- Breed + photo — no triage strip, confidence pill only -->
+      <div style="padding:14px 16px;display:flex;gap:13px;align-items:flex-start">
+        ${photoHtml}
+        <div style="flex:1;min-width:0">
+          <div style="font-family:var(--serif);font-size:24px;font-weight:800;color:var(--terra);line-height:1;margin-bottom:5px">${esc(d.breed)}</div>
+          <div style="font-size:11.5px;color:var(--sub);line-height:1.6;margin-bottom:10px">${esc(d.estimatedAge)} · ${esc(d.size)} · Coat: ${esc(d.coat)}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${pill('🎯 '+d.confidence+'% breed match','var(--terra)')}
+          </div>
+        </div>
+      </div>
+
+      <!-- Health Assessment — triage reason + visualHealth, unified style -->
+      <div style="padding:12px 16px 14px;border-top:1px solid var(--bord)">
+        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:var(--terra);margin-bottom:9px">🩺 Health Assessment</div>
+        <div style="border-left:2px solid var(--terra-a);padding-left:12px;display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:12.5px;color:var(--sub);font-style:italic;line-height:1.75">${esc(d.triage?.reason||'')}</div>
+          <div style="font-size:12.5px;color:var(--sub);font-style:italic;line-height:1.75">${esc(d.visualHealth)}</div>
+        </div>
+      </div>
+
+      <!-- Fun Fact -->
+      <div style="padding:11px 16px 13px;border-top:1px solid var(--bord);background:rgba(106,90,170,.03)">
+        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:var(--violet);margin-bottom:5px">✨ Fun Fact</div>
+        <div style="font-size:12px;color:var(--sub);line-height:1.6;font-style:italic">${esc(d.funFact)}</div>
+      </div>
+
+      <!-- At a glance -->
+      <div style="border-top:1px solid var(--bord)">
+        <span class="sec-lbl">At a glance</span>
+        <div class="glance-grid">${glanceHtml}</div>
+      </div>
+
+      <!-- Key insights — Temperament only -->
+      <div style="border-top:1px solid var(--bord)">
+        <span class="sec-lbl">Key insights</span>
+        <div style="padding:0 0 4px">
+          <div class="insight-row">
+            <span class="insight-key">Temperament</span>
+            <span class="insight-val">${esc(d.temperamentClues)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ K9 / POLICE + DOG SHOW — hidden, code preserved ══
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+      K9: ${esc(d.k9?.verdict||'')} — ${esc(d.k9?.reason||'')}
+      Show: ${esc(d.showDog?.verdict||'')} — ${esc(d.showDog?.reason||'')}
+    </div>
+    ══ end hidden section ══ -->
+
+    <!-- ══ HOME CARE TIPS — commented out, preserved ══
+    <div class="card rise" style="padding:17px">
+      <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:var(--sage);margin-bottom:10px">🏠 Home Care Tips</div>
+      ${(d.homeRemedy||[]).map(r=>`<div class="dot-row">· ${esc(r)}</div>`).join('')}
+    </div>
+    ══ end home care ══ -->
+
+    <!-- TODAY'S HEALTH CHECKS -->
+    <div class="card rise" id="health-checks-card">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--bord)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Today's Health Checks</div>
+          <div id="hc-counter" style="font-size:11px;font-weight:700;color:var(--sage)">0 / 5 Completed</div>
+        </div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:10px">Complete all tasks to boost ${esc(d.breed.split(' ')[0])}'s score!</div>
+        <div style="height:5px;background:var(--s2);border-radius:3px;overflow:hidden">
+          <div id="hc-bar" style="height:100%;width:0%;background:var(--terra);border-radius:3px;transition:width .4s ease"></div>
+        </div>
+      </div>
+      <div id="hc-rows"></div>
+    </div>
+
+    <!-- ══ NUTRITION GUIDE CARD ══ -->
+    <div class="card rise">
+      <div style="padding:13px 16px;border-bottom:1px solid var(--bord);display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Nutrition Guide</div>
+        <div style="font-size:10px;color:var(--dim)">for ${esc(d.breed)}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr">
+        <div style="padding:14px;border-right:1px solid var(--bord)">
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:11px">
+            <div style="width:24px;height:24px;border-radius:6px;background:rgba(93,148,105,.15);display:flex;align-items:center;justify-content:center;font-size:13px">🥩</div>
+            <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:#3E7A4A">Safe Foods</div>
+          </div>
+          ${eatRows}
+        </div>
+        <div style="padding:14px">
+          <div style="display:flex;align-items:center;gap:7px;margin-bottom:11px">
+            <div style="width:24px;height:24px;border-radius:6px;background:rgba(184,92,53,.12);display:flex;align-items:center;justify-content:center;font-size:13px">🚫</div>
+            <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:#B85C35">Avoid</div>
+          </div>
+          ${avoidRows}
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ MEAL PLAN CARD ══ -->
+    <div class="rise" style="background:linear-gradient(145deg,#FFFAF5,#FFF4EA);border:1px solid rgba(196,113,74,.3);border-radius:18px;overflow:hidden;position:relative;box-shadow:0 2px 18px rgba(44,36,22,.06)">
+      <div style="padding:15px 15px 8px">
+        <div style="display:flex;align-items:flex-start;gap:11px;margin-bottom:9px">
+          <div style="width:46px;height:46px;border-radius:12px;background:var(--terra-a);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🍽️</div>
+          <div style="flex:1;min-width:0;padding-top:2px">
+            <div style="font-size:13.5px;font-weight:700;color:var(--text);margin-bottom:3px;line-height:1.3">Meal Plan</div>
+            <div style="font-size:11px;color:var(--sub);line-height:1.5">Carefully planned by most trusted vets · personalised for your dog</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+          <div style="font-size:10px;color:var(--sub)">✅ Vet-approved recipes</div>
+          <div style="font-size:10px;color:var(--sub)">✅ Breed-specific</div>
+        </div>
+      </div>
+      <div style="padding:0 15px 15px">
+        <button onclick="mpOpen()" style="width:100%;padding:12px;border:none;border-radius:12px;background:var(--terra);color:#fff;font-size:13px;font-weight:700;cursor:pointer">Get Meal Plan →</button>
+      </div>
+    </div>
+
+    <!-- ══ TWO ENTRY BLOCKS: EXPLORE TOOLS + PET WORLD ══ -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px" class="rise">
+
+      <!-- Explore Tools -->
+      <div class="card-warm" onclick="switchTab('explore')" style="display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;padding:16px;text-align:center">
+        <div style="width:48px;height:48px;border-radius:13px;background:var(--terra-a);display:flex;align-items:center;justify-content:center;font-size:24px">🧭</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--terra);margin-bottom:3px">Explore Tools</div>
+          <div style="font-size:10.5px;color:var(--sub);line-height:1.5">Heat Cycle · Pregnancy Calc</div>
+        </div>
+      </div>
+
+      <!-- Pet World -->
+      <div style="background:linear-gradient(145deg,#F2FAF4,#E8F5EB);border:1px solid rgba(93,148,105,.28);border-radius:18px;overflow:hidden;box-shadow:0 2px 18px rgba(44,36,22,.06);display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;padding:16px;text-align:center" onclick="pwOpen()">
+        <div style="width:48px;height:48px;border-radius:13px;background:rgba(93,148,105,.15);display:flex;align-items:center;justify-content:center;font-size:24px">🗺️</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#3E7A4A;margin-bottom:3px">Pet World</div>
+          <div style="font-size:10.5px;color:var(--sub);line-height:1.5">Find Nearby Pets</div>
+        </div>
+      </div>
+
+    </div>
+
+  `;
+}
+
+// ─── RENDER: VACCINE PANEL ────────────────────────────────────────────────────
+function renderVaccinePanel(){
+  const panel=document.getElementById('panel-vaccine');
+  if(vaccineLoaded && vaccineData){ buildVaccineUI(vaccineData); return; }
+  if(vaccineLoaded && !vaccineData){
+    panel.innerHTML=`<div class="err">⚠ Could not load vaccine data. <button onclick="vaccineLoaded=false;renderVaccinePanel()" style="background:none;border:none;color:var(--terra);font-weight:700;cursor:pointer;font-size:12px">Retry</button></div>`;
+    return;
+  }
+  panel.innerHTML=`
+    <div class="card rise" style="padding:20px">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="spinner-sm"></div>
+        <div style="font-size:13px;color:var(--sub)">
+          Building vaccine plan for <strong style="color:var(--text)">${esc(scanData?.breed||'your dog')}</strong>…
+        </div>
+      </div>
+    </div>`;
+  const breed=scanData?.breed||'the dog';
+  const age=scanData?.estimatedAge||'unknown age';
+  const ageWeeks=scanData?.ageRangeWeeks?.[0]||12;
+  callClaude([{role:'user',content:`Vaccination schedule for a ${breed} aged ${age} (approx ${ageWeeks} weeks). Return ONLY this JSON (strings under 55 chars):
+{"currentAge":"${age}","nextDueDate":"string","immediateVaccines":["string"],"schedule":[{"milestone":"6-8 weeks","vaccines":["DA2P","Bordetella"],"notes":"string"},{"milestone":"10-12 weeks","vaccines":["DHPP","Leptospirosis"],"notes":"string"},{"milestone":"14-16 weeks","vaccines":["DHPP final","Rabies"],"notes":"string"},{"milestone":"1 year","vaccines":["DHPP annual","Rabies booster"],"notes":"string"}],"dewormingSchedule":["string","string"],"heartworm":"string","fleasTicks":"string","breedSpecificNote":"string"}`}],
+    'Return ONLY valid JSON. No markdown. Strings under 55 chars.',1200)
+  .then(raw=>{ vaccineData=parseJSON(raw); vaccineLoaded=true; if(activeTab==='vaccine') buildVaccineUI(vaccineData); })
+  .catch(e=>{ vaccineLoaded=true; vaccineData=null; if(activeTab==='vaccine'){ panel.innerHTML=`<div class="err">⚠ ${esc(e.message)} <button onclick="vaccineLoaded=false;renderVaccinePanel()" style="background:none;border:none;color:var(--terra);font-weight:700;cursor:pointer;font-size:12px">Retry</button></div>`; } });
+}
+
+// ─── VACCINE UI STATE (module-level so dynamic updates can reach it) ──────────
+let _vcDue=[], _vcUpcoming=[], _vcPast=[], _vcPastOpen=true;
+
+// INR cost map — keys are fragments of vaccine names (lowercase)
+const INR_COST = {
+  'dhpp':         {lo:500,  hi:800,  label:'DHPP Booster'},
+  'da2p':         {lo:500,  hi:800,  label:'DHPP / DA2P'},
+  'rabies':       {lo:350,  hi:600,  label:'Rabies'},
+  'leptospirosis':{lo:400,  hi:700,  label:'Leptospirosis'},
+  'bordetella':   {lo:450,  hi:700,  label:'Bordetella'},
+  'influenza':    {lo:600,  hi:900,  label:'Canine Influenza'},
+  'coronavirus':  {lo:400,  hi:650,  label:'Coronavirus'},
+  'parvovirus':   {lo:450,  hi:750,  label:'Parvovirus'},
+};
+
+function lookupCost(name){
+  const n=name.toLowerCase();
+  for(const [key,val] of Object.entries(INR_COST)){
+    if(n.includes(key)) return val;
+  }
+  return {lo:300, hi:600, label:name};
+}
+
+function sumCosts(list){
+  let lo=0, hi=0;
+  list.forEach(v=>{ const c=lookupCost(v.name); lo+=c.lo; hi+=c.hi; });
+  return {lo, hi};
+}
+
+function fixLastBorder(listId){
+  const rows=document.querySelectorAll('#'+listId+'>div[data-vid]');
+  rows.forEach((r,i,a)=>{ r.style.borderBottom=i<a.length-1?'1px solid var(--bord)':'none'; });
+}
+
+function renderDueList(){
+  const dl=document.getElementById('vc-due-list');
+  const de=document.getElementById('vc-due-empty');
+  if(!dl) return;
+  dl.innerHTML=_vcDue.map(v=>`
+    <div data-vid="${v.id}" style="display:flex;align-items:center;gap:11px;padding:10px 16px;border-bottom:1px solid var(--bord);transition:opacity .3s,background .3s">
+      <div onclick="vcMarkGiven('${v.id}','due')" style="width:20px;height:20px;border-radius:6px;border:1.5px solid var(--terra);background:transparent;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:700;color:var(--text)">${esc(v.name)}</div>
+        <div style="font-size:10.5px;color:#B85C35;margin-top:1px">${esc(v.detail)}</div>
+      </div>
+      <span style="font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(184,92,53,.1);color:#B85C35;font-weight:700;flex-shrink:0;white-space:nowrap">Due</span>
+    </div>`).join('');
+  de.style.display=_vcDue.length===0?'block':'none';
+  fixLastBorder('vc-due-list');
+}
+
+function renderUpcomingList(){
+  const ul=document.getElementById('vc-upcoming-list');
+  if(!ul) return;
+  ul.innerHTML=_vcUpcoming.map(v=>`
+    <div data-vid="${v.id}" style="display:flex;align-items:center;gap:11px;padding:10px 16px;border-bottom:1px solid var(--bord);transition:opacity .3s,background .3s">
+      <div onclick="vcMarkGiven('${v.id}','upcoming')" style="width:20px;height:20px;border-radius:6px;border:1.5px solid var(--bords);background:transparent;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:700;color:var(--text)">${esc(v.name)}</div>
+        <div style="font-size:10.5px;color:var(--sub);margin-top:1px">${esc(v.detail)}</div>
+      </div>
+      <span style="font-size:9px;padding:2px 8px;border-radius:10px;background:rgba(160,112,32,.09);color:var(--amber);font-weight:700;flex-shrink:0;white-space:nowrap">${esc(v.month||'')}</span>
+    </div>`).join('');
+  fixLastBorder('vc-upcoming-list');
+}
+
+function renderPastList(){
+  const pl=document.getElementById('vc-past-list');
+  const pc=document.getElementById('vc-past-count');
+  if(!pl) return;
+  pl.innerHTML=_vcPast.length
+    ? _vcPast.map(v=>`
+      <div data-vid="${v.id}" style="display:flex;align-items:center;gap:11px;padding:10px 16px;border-bottom:1px solid var(--bord)">
+        <div style="width:20px;height:20px;border-radius:6px;background:var(--sage);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12.5px;font-weight:700;color:var(--text)">${esc(v.name)}</div>
+          <div style="font-size:10.5px;color:var(--sub);margin-top:1px">${esc(v.detail)}</div>
+        </div>
+        <div style="font-size:10px;color:var(--dim);flex-shrink:0">${esc(v.date||'')}</div>
+      </div>`).join('')
+    : '<div style="padding:12px 16px;font-size:12px;color:var(--dim)">No vaccines recorded yet.</div>';
+  if(pc) pc.textContent=_vcPast.length+' recorded';
+  fixLastBorder('vc-past-list');
+}
+
+function renderCostCard(){
+  const remaining=[..._vcDue,..._vcUpcoming];
+  const {lo,hi}=sumCosts(remaining);
+  const totalEl=document.getElementById('vc-cost-total');
+  const rowsEl =document.getElementById('vc-cost-rows');
+  if(!totalEl||!rowsEl) return;
+  if(remaining.length===0){
+    totalEl.textContent='₹0';
+    rowsEl.innerHTML='<div style="font-size:11px;color:var(--sage)">All vaccines accounted for ✓</div>';
+  } else {
+    totalEl.textContent='₹'+lo.toLocaleString('en-IN')+'–'+hi.toLocaleString('en-IN');
+    rowsEl.innerHTML=remaining.map(v=>{
+      const c=lookupCost(v.name);
+      return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:10.5px;color:var(--sub)">${esc(v.name)}</span>
+        <span style="font-size:10.5px;color:var(--text);font-weight:700">₹${c.lo.toLocaleString('en-IN')}–${c.hi.toLocaleString('en-IN')}</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+window.vcMarkGiven=function(id,source){
+  const today=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+  let item;
+  if(source==='due'){
+    item=_vcDue.find(v=>v.id===id); if(!item) return;
+    _vcDue=_vcDue.filter(v=>v.id!==id);
+    _vcPast.unshift({...item,detail:'Given · '+today,date:today});
+    // Due vaccines +8 pts each (overdue, high impact)
+    _hs_vacc += 8; hsFlash(8,'#B85C35'); hsUpdate();
+  } else {
+    item=_vcUpcoming.find(v=>v.id===id); if(!item) return;
+    _vcUpcoming=_vcUpcoming.filter(v=>v.id!==id);
+    _vcPast.unshift({...item,detail:'Given · '+today,date:today});
+    // Upcoming vaccines +5 pts each
+    _hs_vacc += 5; hsFlash(5,'var(--amber)'); hsUpdate();
+  }
+  const row=document.querySelector('#vc-'+(source==='due'?'due':'upcoming')+'-list>div[data-vid="'+id+'"]');
+  if(row){
+    row.style.background='rgba(93,148,105,.09)';
+    row.style.opacity='0';
+    setTimeout(()=>{
+      renderDueList(); renderUpcomingList();
+      renderPastList(); renderCostCard();
+      if(!_vcPastOpen) vcTogglePast();
+    },320);
+  } else {
+    renderDueList(); renderUpcomingList();
+    renderPastList(); renderCostCard();
+  }
+};
+
+window.vcTogglePast=function(){
+  _vcPastOpen=!_vcPastOpen;
+  const body=document.getElementById('vc-past-body');
+  const arrow=document.getElementById('vc-past-arrow');
+  if(body)  body.style.display=_vcPastOpen?'block':'none';
+  if(arrow) arrow.style.transform=_vcPastOpen?'rotate(0deg)':'rotate(180deg)';
+};
+
+window.vcToggleUpcoming=function(){
+  const body=document.getElementById('vc-upcoming-body');
+  const arrow=document.getElementById('vc-upcoming-arrow');
+  if(!body) return;
+  const open = body.style.display!=='none';
+  body.style.display=open?'none':'block';
+  if(arrow) arrow.style.transform=open?'rotate(180deg)':'rotate(0deg)';
+};
+
+window.vcToggleVetVisit=function(){
+  const body=document.getElementById('vc-vet-body');
+  const arrow=document.getElementById('vc-vet-arrow');
+  if(!body) return;
+  const open = body.style.display!=='none';
+  body.style.display=open?'none':'block';
+  if(arrow) arrow.style.transform=open?'rotate(0deg)':'rotate(180deg)';
+};
+
+window.vcToggleCostTip=function(){
+  const tip=document.getElementById('vc-cost-tip');
+  if(!tip) return;
+  tip.style.display=tip.style.display==='none'?'block':'none';
+};
+
+window.vcToggleUpcoming=function(){
+  const body=document.getElementById('vc-upcoming-body');
+  const arrow=document.getElementById('vc-upcoming-arrow');
+  if(!body) return;
+  const open=body.style.display!=='none';
+  body.style.display=open?'none':'block';
+  if(arrow) arrow.style.transform=open?'rotate(180deg)':'rotate(0deg)';
+};
+
+window.vcToggleVetVisit=function(){
+  const body=document.getElementById('vc-vet-body');
+  const arrow=document.getElementById('vc-vet-arrow');
+  if(!body) return;
+  const open=body.style.display!=='none';
+  body.style.display=open?'none':'block';
+  if(arrow) arrow.style.transform=open?'rotate(0deg)':'rotate(180deg)';
+};
+
+window.vcToggleCostTip=function(){
+  const tip=document.getElementById('vc-cost-tip');
+  if(!tip) return;
+  tip.style.display=tip.style.display==='none'?'block':'none';
+};
+
+window.vcScheduleVet=function(){
+  const val=document.getElementById('vc-vet-date').value;
+  if(!val) return;
+  const d=new Date(val);
+  const fmt=d.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+  const conf=document.getElementById('vc-vet-confirm');
+  const none=document.getElementById('vc-vet-none');
+  const disp=document.getElementById('vc-vet-display');
+  if(conf)  conf.style.display='block';
+  if(none)  none.style.display='none';
+  if(disp)  disp.textContent=fmt;
+};
+
+function buildVaccineUI(v){
+  const panel=document.getElementById('panel-vaccine');
+  const breed=esc(scanData?.breed||'');
+
+  // Build due + upcoming from AI data
+  _vcPast=[];  _vcPastOpen=true;
+  _vcDue=(v.immediateVaccines||[]).map((name,i)=>({id:'d'+i,name,detail:'Action needed now — overdue',month:''}));
+  _vcUpcoming=(v.schedule||[]).flatMap((s,si)=>
+    (s.vaccines||[]).map((name,vi)=>({id:'u'+si+'_'+vi,name,detail:esc(s.notes||s.milestone),month:s.milestone}))
+  );
+
+  const {lo,hi}=sumCosts([..._vcDue,..._vcUpcoming]);
+
+  panel.innerHTML=`
+    <!-- Header -->
+    <div class="card-warm rise" style="padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-family:var(--serif);font-size:18px;font-weight:700;color:var(--terra)">${breed} · ${esc(v.currentAge)}</div>
+        <div style="font-size:10.5px;color:var(--sub);margin-top:3px">Personalised vaccine plan</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:8.5px;color:var(--dim);text-transform:uppercase;letter-spacing:.1em">Next due</div>
+        <div style="font-size:13.5px;font-weight:700;color:var(--amber)">${esc(v.nextDueDate)}</div>
+      </div>
+    </div>
+
+    <!-- Due Doses -->
+    <div class="card rise" style="overflow:hidden">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:9px">
+        <div style="width:28px;height:28px;border-radius:8px;background:rgba(196,113,74,.12);display:flex;align-items:center;justify-content:center;font-size:14px">🚨</div>
+        <div>
+          <div style="font-size:12.5px;font-weight:700;color:var(--text)">Due Doses</div>
+          <div style="font-size:10px;color:#B85C35">Action needed now</div>
+        </div>
+      </div>
+      <div id="vc-due-list" style="padding:4px 0"></div>
+      <div id="vc-due-empty" style="display:none;padding:14px 16px;font-size:12px;color:var(--sage);text-align:center">All due doses recorded ✓</div>
+    </div>
+
+    <!-- Upcoming 12 months — collapsible -->
+    <div class="card rise" style="overflow:hidden">
+      <div onclick="vcToggleUpcoming()" style="padding:12px 16px;display:flex;align-items:center;gap:9px;cursor:pointer;user-select:none">
+        <div style="width:28px;height:28px;border-radius:8px;background:rgba(160,112,32,.1);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📅</div>
+        <div style="flex:1">
+          <div style="font-size:12.5px;font-weight:700;color:var(--text)">Upcoming — Next 12 Months</div>
+          <div style="font-size:10px;color:var(--sub)">Mark as given when administered</div>
+        </div>
+        <span id="vc-upcoming-arrow" style="font-size:11px;color:var(--dim);transition:transform .25s;flex-shrink:0">▲</span>
+      </div>
+      <div id="vc-upcoming-body" style="border-top:1px solid var(--bord)">
+        <div id="vc-upcoming-list" style="padding:4px 0"></div>
+      </div>
+    </div>
+
+    <!-- Cost + Vet Visit -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+
+      <!-- Cost Estimate — simplified, info icon, no per-vaccine list -->
+      <div class="card rise" style="padding:15px;position:relative">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:11px">
+          <div style="width:26px;height:26px;border-radius:7px;background:rgba(106,90,170,.1);display:flex;align-items:center;justify-content:center;font-size:13px">💰</div>
+          <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:var(--violet);flex:1">Cost Estimate</div>
+          <!-- Info icon -->
+          <div onclick="vcToggleCostTip()" style="width:18px;height:18px;border-radius:50%;background:rgba(160,112,32,.15);display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;font-weight:700;color:var(--amber);flex-shrink:0;position:relative">
+            ℹ
+            <div id="vc-cost-tip" style="display:none;position:absolute;top:22px;right:0;width:170px;background:var(--text);color:var(--s0);font-size:10px;line-height:1.6;padding:8px 10px;border-radius:9px;z-index:30;font-weight:400;white-space:normal">
+              Prices may vary by city &amp; clinic. Many vaccines are available as combined boosters (3-in-1 or 4-in-1 shots), which can reduce your total cost.
+              <div style="position:absolute;top:-5px;right:6px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:5px solid var(--text)"></div>
+            </div>
+          </div>
+        </div>
+        <div id="vc-cost-total" style="font-size:20px;font-weight:700;color:var(--text);margin-bottom:3px;transition:all .3s">₹${lo.toLocaleString('en-IN')}–${hi.toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--dim);line-height:1.5">Remaining · India market rates</div>
+        <div id="vc-cost-rows" style="display:none"></div>
+      </div>
+
+      <!-- Next Vet Visit — collapsible -->
+      <div class="card rise" style="overflow:hidden">
+        <div onclick="vcToggleVetVisit()" style="padding:13px 15px;display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none">
+          <div style="width:26px;height:26px;border-radius:7px;background:rgba(196,113,74,.1);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">🏥</div>
+          <div style="flex:1;font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:var(--terra)">Next Vet Visit</div>
+          <span id="vc-vet-arrow" style="font-size:11px;color:var(--dim);transition:transform .25s;flex-shrink:0">▼</span>
+        </div>
+        <div id="vc-vet-body" style="display:none;border-top:1px solid var(--bord);padding:12px 15px">
+          <div style="font-size:11px;color:var(--sub);margin-bottom:7px">Pick a visit date</div>
+          <input type="date" id="vc-vet-date" onchange="vcScheduleVet()" style="width:100%;padding:8px 10px;border:1px solid var(--bords);border-radius:9px;font-size:12px;color:var(--text);background:var(--s1);outline:none;cursor:pointer;box-sizing:border-box"/>
+          <div id="vc-vet-confirm" style="display:none;margin-top:9px;padding:8px 10px;border-radius:9px;background:rgba(93,148,105,.09);border:1px solid rgba(93,148,105,.28)">
+            <div style="font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--sage);margin-bottom:3px">Scheduled Visit</div>
+            <div id="vc-vet-display" style="font-size:12px;font-weight:700;color:var(--sage)"></div>
+          </div>
+          <div id="vc-vet-none" style="margin-top:9px;font-size:10.5px;color:var(--dim);font-style:italic">No visit scheduled yet</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Past Vaccines -->
+    <div class="card rise" style="overflow:hidden">
+      <div onclick="vcTogglePast()" style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
+        <div style="display:flex;align-items:center;gap:9px">
+          <div style="width:28px;height:28px;border-radius:8px;background:rgba(93,148,105,.12);display:flex;align-items:center;justify-content:center;font-size:14px">✅</div>
+          <div>
+            <div style="font-size:12.5px;font-weight:700;color:var(--text)">Past Vaccines</div>
+            <div id="vc-past-count" style="font-size:10px;color:var(--sub)">0 recorded</div>
+          </div>
+        </div>
+        <span id="vc-past-arrow" style="font-size:11px;color:var(--dim);transition:transform .25s">▲</span>
+      </div>
+      <div id="vc-past-body" style="border-top:1px solid var(--bord)">
+        <div style="padding:6px 14px 7px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.11em;color:var(--dim);background:var(--s1)">
+          Tick any due or upcoming dose to move it here
+        </div>
+        <div id="vc-past-list" style="padding:4px 0"></div>
+      </div>
+    </div>
+
+    <!-- Breed-specific note -->
+    ${v.breedSpecificNote?`
+    <div class="card-warm rise" style="padding:15px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">
+        <span style="font-size:15px">📌</span>
+        <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:var(--terra)">Breed-Specific Note</div>
+      </div>
+      <div style="font-size:12.5px;color:var(--sub);line-height:1.75">${esc(v.breedSpecificNote)}</div>
+    </div>`:''}
+  `;
+
+  // Render all dynamic sections
+  renderDueList();
+  renderUpcomingList();
+  renderPastList();
+  renderCostCard();
+}
+// ─── RENDER: EXPLORE PANEL ────────────────────────────────────────────────────
+function renderExplorePanel(){
+  // Reset to tool list view every time tab is opened
+  _exploreActiveTool = null;
+  _buildExploreUI();
+}
+
+// ── Breed-specific heat cycle data ───────────────────────────────────────────
+// Sources: MSD Veterinary Manual, VCA Animal Hospitals, AKC breed health guides
+// intervalLo / intervalHi = months between heat cycles
+// cycleDayLo / cycleDayHi = duration of one full heat cycle in days
+const BREED_HEAT_DATA = {
+  // Small breeds – cycle more frequently
+  'chihuahua':          {lo:4,  hi:6,  dLo:14, dHi:21},
+  'yorkshire terrier':  {lo:4,  hi:6,  dLo:14, dHi:21},
+  'toy poodle':         {lo:4,  hi:6,  dLo:14, dHi:21},
+  'miniature poodle':   {lo:4,  hi:6,  dLo:14, dHi:21},
+  'dachshund':          {lo:5,  hi:7,  dLo:14, dHi:21},
+  'shih tzu':           {lo:5,  hi:7,  dLo:14, dHi:21},
+  'maltese':            {lo:4,  hi:6,  dLo:14, dHi:21},
+  'pomeranian':         {lo:4,  hi:6,  dLo:14, dHi:21},
+  'bichon frise':       {lo:5,  hi:7,  dLo:14, dHi:21},
+  'cavalier king charles spaniel': {lo:5, hi:7, dLo:14, dHi:21},
+  'french bulldog':     {lo:6,  hi:8,  dLo:14, dHi:21},
+  'boston terrier':     {lo:5,  hi:7,  dLo:14, dHi:21},
+  'pug':                {lo:5,  hi:7,  dLo:14, dHi:21},
+  'beagle':             {lo:6,  hi:8,  dLo:14, dHi:21},
+  'cocker spaniel':     {lo:6,  hi:7,  dLo:14, dHi:21},
+  // Medium breeds
+  'border collie':      {lo:6,  hi:8,  dLo:14, dHi:21},
+  'australian shepherd':{lo:6,  hi:8,  dLo:14, dHi:21},
+  'english springer spaniel':{lo:6, hi:8, dLo:14, dHi:21},
+  'siberian husky':     {lo:6,  hi:12, dLo:14, dHi:21},
+  'samoyed':            {lo:6,  hi:10, dLo:14, dHi:21},
+  'basenji':            {lo:12, hi:12, dLo:14, dHi:21}, // only once a year
+  'shiba inu':          {lo:6,  hi:8,  dLo:14, dHi:21},
+  'shar pei':           {lo:6,  hi:8,  dLo:14, dHi:21},
+  'bulldog':            {lo:6,  hi:8,  dLo:14, dHi:21},
+  'english bulldog':    {lo:6,  hi:8,  dLo:14, dHi:21},
+  // Large breeds
+  'labrador retriever': {lo:6,  hi:8,  dLo:14, dHi:21},
+  'labrador':           {lo:6,  hi:8,  dLo:14, dHi:21},
+  'golden retriever':   {lo:6,  hi:8,  dLo:14, dHi:21},
+  'german shepherd':    {lo:6,  hi:8,  dLo:14, dHi:21},
+  'rottweiler':         {lo:6,  hi:9,  dLo:14, dHi:21},
+  'doberman pinscher':  {lo:6,  hi:9,  dLo:14, dHi:21},
+  'dobermann':          {lo:6,  hi:9,  dLo:14, dHi:21},
+  'boxer':              {lo:6,  hi:9,  dLo:14, dHi:21},
+  'standard poodle':    {lo:6,  hi:9,  dLo:14, dHi:21},
+  'belgian malinois':   {lo:6,  hi:8,  dLo:14, dHi:21},
+  'weimaraner':         {lo:6,  hi:9,  dLo:14, dHi:21},
+  'vizsla':             {lo:6,  hi:9,  dLo:14, dHi:21},
+  'dalmatian':          {lo:6,  hi:8,  dLo:14, dHi:21},
+  'pointer':            {lo:6,  hi:9,  dLo:14, dHi:21},
+  'alaskan malamute':   {lo:6,  hi:12, dLo:14, dHi:21},
+  // Giant breeds – cycle less frequently
+  'great dane':         {lo:8,  hi:12, dLo:14, dHi:21},
+  'saint bernard':      {lo:8,  hi:12, dLo:14, dHi:21},
+  'bernese mountain dog':{lo:8, hi:12, dLo:14, dHi:21},
+  'newfoundland':       {lo:8,  hi:12, dLo:14, dHi:21},
+  'mastiff':            {lo:8,  hi:12, dLo:14, dHi:21},
+  'english mastiff':    {lo:8,  hi:12, dLo:14, dHi:21},
+  'irish wolfhound':    {lo:8,  hi:12, dLo:14, dHi:21},
+  'great pyrenees':     {lo:8,  hi:12, dLo:14, dHi:21},
+  'tibetan mastiff':    {lo:12, hi:12, dLo:14, dHi:21},
+};
+// Default fallback by size word in breed name
+function getHeatData(breedName){
+  const b = (breedName||'').toLowerCase().trim();
+  // exact match first
+  if(BREED_HEAT_DATA[b]) return BREED_HEAT_DATA[b];
+  // partial match
+  for(const key of Object.keys(BREED_HEAT_DATA)){
+    if(b.includes(key) || key.includes(b)) return BREED_HEAT_DATA[key];
+  }
+  // fallback by size keywords
+  if(/giant|great dane|mastiff|wolfhound|newfound|saint bernard|bernese|pyrenees/.test(b))
+    return {lo:8,  hi:12, dLo:14, dHi:21};
+  if(/large|retriever|shepherd|rottweiler|boxer|doberman|weimaraner|standard poodle/.test(b))
+    return {lo:6,  hi:9,  dLo:14, dHi:21};
+  if(/small|toy|mini|chihuahua|yorkie|pomeranian|maltese|shih|bichon/.test(b))
+    return {lo:4,  hi:6,  dLo:14, dHi:21};
+  // universal default (medium breed)
+  return {lo:6, hi:8, dLo:14, dHi:21};
+}
+
+let _exploreActiveTool = null;
+
+function _buildExploreUI(){
+  const panel = document.getElementById('panel-explore');
+  if(_exploreActiveTool === 'heat'){ _renderHeatCalc(panel); return; }
+  if(_exploreActiveTool === 'preg'){ _renderPregCalc(panel); return; }
+
+  const comingSoonTools = [
+    {icon:'🩺', name:'Track Pregnancy',       sub:'Week-by-week pregnancy monitoring'},
+    {icon:'💩', name:'Poop Analyser',         sub:'Health diagnostics from stool analysis'},
+    {icon:'🔊', name:'Bark & Sound Simulator',sub:'Make your pet react to multiple sounds'},
+  ];
+
+  panel.innerHTML = `
+    <div style="margin-bottom:4px">
+      <div style="font-family:var(--serif);font-size:20px;font-weight:700;color:var(--terra);margin-bottom:3px">Explore Tools</div>
+      <div style="font-size:11px;color:var(--sub)">Useful calculators for pet parents</div>
+    </div>
+
+    <div style="font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.16em;color:var(--dim);margin-bottom:8px">Available Now</div>
+    <div class="card rise" style="overflow:hidden">
+      <div onclick="window._openExploreTool('heat')" style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--bord);cursor:pointer">
+        <div style="width:42px;height:42px;border-radius:11px;background:var(--terra-a);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🌡️</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Heat Cycle Calculator</div>
+          <div style="font-size:11px;color:var(--sub);margin-top:2px">Track &amp; predict your dog's next heat</div>
+        </div>
+        <span style="font-size:20px;color:var(--terra-a)">›</span>
+      </div>
+      <div onclick="window._openExploreTool('preg')" style="display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer">
+        <div style="width:42px;height:42px;border-radius:11px;background:rgba(93,148,105,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg width="24" height="24" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="14" cy="14" r="12.5" stroke="#5D9469" stroke-width="2" fill="none"/><ellipse cx="13" cy="15" rx="5.5" ry="6.5" fill="#5D9469" opacity=".85" transform="rotate(-15 13 15)"/><circle cx="10" cy="9.5" r="3.2" fill="#5D9469" opacity=".9"/><ellipse cx="8.2" cy="7.5" rx="1.4" ry="2" fill="#3E7A4A" opacity=".9" transform="rotate(-20 8.2 7.5)"/><ellipse cx="8.2" cy="10.5" rx="1.2" ry=".8" fill="#3E7A4A" opacity=".7"/><path d="M17.5 19 Q21 17 20 13.5 Q19.5 11.5 18 12" stroke="#5D9469" stroke-width="1.8" stroke-linecap="round" fill="none" opacity=".8"/><circle cx="15.5" cy="20.5" r="1" fill="#3E7A4A" opacity=".7"/><circle cx="17" cy="21.2" r=".8" fill="#3E7A4A" opacity=".7"/></svg></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Pregnancy Calculator</div>
+          <div style="font-size:11px;color:var(--sub);margin-top:2px">Calculate due date from mating date</div>
+        </div>
+        <span style="font-size:20px;color:var(--terra-a)">›</span>
+      </div>
+    </div>
+
+    <div style="font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.16em;color:var(--dim);margin-bottom:8px;margin-top:4px">Coming Soon</div>
+    <div style="background:var(--s1);border:1px solid var(--bord);border-radius:18px;overflow:hidden;opacity:.75">
+      ${comingSoonTools.map((t,i)=>`
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;${i<comingSoonTools.length-1?'border-bottom:1px solid var(--bord)':''}">
+          <div style="width:42px;height:42px;border-radius:11px;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">${t.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:var(--sub)">${t.name}</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:2px">${t.sub}</div>
+          </div>
+          <span style="font-size:9px;padding:2px 8px;border-radius:8px;background:var(--s2);color:var(--dim);font-weight:700;border:1px solid var(--bord);flex-shrink:0;white-space:nowrap">Soon</span>
+        </div>`).join('')}
+    </div>`;
+}
+
+window._openExploreTool = function(tool){
+  _exploreActiveTool = tool;
+  _buildExploreUI();
+  document.getElementById('panel-explore').scrollTop = 0;
+};
+
+function _backToExploreList(){
+  _exploreActiveTool = null;
+  _buildExploreUI();
+}
+
+function _calcInfoBox(icon, html){
+  return `<div style="display:flex;gap:10px;padding:11px 13px;border-radius:11px;background:var(--terra-a);border:1px solid rgba(196,113,74,.28)">
+    <span style="font-size:16px;flex-shrink:0">${icon}</span>
+    <div style="font-size:12px;color:var(--text);line-height:1.7">${html}</div>
+  </div>`;
+}
+function _noteBox(html){
+  return `<div style="padding:10px 13px;border-radius:11px;background:rgba(160,112,32,.08);border:1px solid rgba(160,112,32,.22);font-size:10.5px;color:var(--amber);line-height:1.6">${html}</div>`;
+}
+function _fmtDate(d){ return d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}); }
+function _addMonths(d,m){ const r=new Date(d); r.setMonth(r.getMonth()+m); return r; }
+function _addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
+
+function _renderHeatCalc(panel){
+  const breed = scanData?.breed || '';
+  const hd    = getHeatData(breed);
+  const breedLabel = breed ? ` for ${breed}` : '';
+
+  panel.innerHTML = `
+    <button onclick="_backToExploreList()" style="background:none;border:none;font-size:12px;font-weight:700;color:var(--terra);cursor:pointer;padding:0;margin-bottom:4px">← All Tools</button>
+
+    <div class="card rise" style="overflow:hidden">
+      <div style="padding:13px 16px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">🌡️</span>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">Heat Cycle Calculator</div>
+          <div style="font-size:10.5px;color:var(--sub)">Breed-specific data${breedLabel}</div>
+        </div>
+      </div>
+      <div style="padding:15px;display:flex;flex-direction:column;gap:12px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--sub);margin-bottom:7px">First day of the cycle</div>
+          <input type="date" id="ex-heat-date" onchange="window._calcHeat()" style="width:100%;padding:10px 12px;border:1px solid var(--bords);border-radius:10px;font-size:13px;color:var(--text);background:var(--s1);outline:none;box-sizing:border-box"/>
+        </div>
+        <div id="ex-heat-result" style="display:flex;flex-direction:column;gap:9px"></div>
+        <div style="font-size:10px;color:var(--dim);line-height:1.6;border-top:1px solid var(--bord);padding-top:10px">
+          📋 Cycle interval${breedLabel}: every <strong>${hd.lo}–${hd.hi} months</strong> · Cycle duration: <strong>${hd.dLo}–${hd.dHi} days</strong><br>
+          Source: MSD Veterinary Manual · VCA Animal Hospitals · AKC Breed Health Guides
+        </div>
+      </div>
+    </div>`;
+}
+
+window._calcHeat = function(){
+  const val = document.getElementById('ex-heat-date')?.value;
+  const res = document.getElementById('ex-heat-result');
+  if(!val || !res) return;
+  const breed = scanData?.breed || '';
+  const hd    = getHeatData(breed);
+  const start = new Date(val);
+  const end1  = _addDays(start, hd.dLo);
+  const end2  = _addDays(start, hd.dHi);
+  const next1 = _addMonths(start, hd.lo);
+  const next2 = _addMonths(start, hd.hi);
+  res.innerHTML =
+    _calcInfoBox('📅', `This cycle will last approximately <strong>${_fmtDate(end1)} – ${_fmtDate(end2)}</strong>`)
+    + _calcInfoBox('🔁', `Next heat cycle expected between <strong>${_fmtDate(next1)}</strong> and <strong>${_fmtDate(next2)}</strong>`)
+    + (breed && BREED_HEAT_DATA[breed.toLowerCase()]
+        ? _noteBox(`⚡ Breed-specific data used for <strong>${breed}</strong>. Individual dogs may vary — track 2–3 cycles for accuracy.`)
+        : _noteBox('⚡ Using average values. Individual dogs may vary — track 2–3 cycles for accuracy. Consult your vet for confirmed timing.'));
+};
+
+function _renderPregCalc(panel){
+  const breed = scanData?.breed || '';
+  const breedLabel = breed ? ` for ${breed}` : '';
+
+  panel.innerHTML = `
+    <button onclick="_backToExploreList()" style="background:none;border:none;font-size:12px;font-weight:700;color:var(--terra);cursor:pointer;padding:0;margin-bottom:4px">← All Tools</button>
+
+    <div class="card rise" style="overflow:hidden">
+      <div style="padding:13px 16px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:10px">
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+  <circle cx="14" cy="14" r="13" stroke="var(--terra)" stroke-width="2" fill="none"/>
+  <!-- puppy body curled -->
+  <ellipse cx="13" cy="15" rx="5.5" ry="6.5" fill="var(--terra)" opacity=".85" transform="rotate(-15 13 15)"/>
+  <!-- head -->
+  <circle cx="10" cy="9.5" r="3.2" fill="var(--terra)" opacity=".9"/>
+  <!-- ear left -->
+  <ellipse cx="8.2" cy="7.5" rx="1.4" ry="2" fill="var(--terra-d)" opacity=".9" transform="rotate(-20 8.2 7.5)"/>
+  <!-- snout -->
+  <ellipse cx="8.2" cy="10.5" rx="1.2" ry=".8" fill="var(--terra-d)" opacity=".7"/>
+  <!-- tail curl -->
+  <path d="M17.5 19 Q21 17 20 13.5 Q19.5 11.5 18 12" stroke="var(--terra)" stroke-width="1.8" stroke-linecap="round" fill="none" opacity=".8"/>
+  <!-- tiny paw -->
+  <circle cx="15.5" cy="20.5" r="1" fill="var(--terra-d)" opacity=".7"/>
+  <circle cx="17" cy="21.2" r=".8" fill="var(--terra-d)" opacity=".7"/>
+</svg>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">Pregnancy Calculator</div>
+          <div style="font-size:10.5px;color:var(--sub)">Canine gestation: 57–65 days (avg 63)</div>
+        </div>
+      </div>
+      <div style="padding:15px;display:flex;flex-direction:column;gap:12px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--sub);margin-bottom:7px">Mating date</div>
+          <input type="date" id="ex-preg-date" onchange="window._calcPreg()" style="width:100%;padding:10px 12px;border:1px solid var(--bords);border-radius:10px;font-size:13px;color:var(--text);background:var(--s1);outline:none;box-sizing:border-box"/>
+        </div>
+        <div id="ex-preg-result" style="display:flex;flex-direction:column;gap:9px"></div>
+        <div style="font-size:10px;color:var(--dim);line-height:1.6;border-top:1px solid var(--bord);padding-top:10px">
+          📋 Gestation is consistent across all dog breeds: <strong>57–65 days</strong> from ovulation, average <strong>63 days</strong> from mating.<br>
+          Source: AVMA · MSD Veterinary Manual · Royal Canin Veterinary Reference
+        </div>
+      </div>
+    </div>`;
+}
+
+window._calcPreg = function(){
+  const val = document.getElementById('ex-preg-date')?.value;
+  const res = document.getElementById('ex-preg-result');
+  if(!val || !res) return;
+  const mating  = new Date(val);
+  const earlyDue = _addDays(mating, 57);
+  const due      = _addDays(mating, 63);
+  const lateDue  = _addDays(mating, 65);
+  const today    = new Date();
+  const daysLeft = Math.round((due - today) / (1000*60*60*24));
+  const dayName  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][due.getDay()];
+  res.innerHTML =
+    _calcInfoBox('🐾', daysLeft > 0
+      ? `Your dog is going to give birth in approximately <strong>${daysLeft} days</strong>`
+      : 'The estimated due date has passed — contact your vet if birth has not occurred.')
+    + _calcInfoBox('📅', `Expected due date: <strong>${_fmtDate(due)}</strong> · a <strong>${dayName}</strong>`)
+    + _calcInfoBox('📆', `Possible range: <strong>${_fmtDate(earlyDue)}</strong> (day 57) to <strong>${_fmtDate(lateDue)}</strong> (day 65)`)
+    + _noteBox('<strong onclick=\"switchTab(\'askvet\')\" style=\"cursor:pointer;text-decoration:underline;color:var(--terra)\">Contact Vet</strong> if birth has not occurred by day 65 from mating. The mating date may differ from actual ovulation by 1–3 days.');
+};
+
+// ─── RENDER: ASK VET PANEL ────────────────────────────────────────────────────
+function renderAskVetPanel(){
+  const panel=document.getElementById('panel-askvet');
+  if(panel.innerHTML.trim()) return; // already built
+  panel.innerHTML=`
+    <div class="card rise" style="padding:16px">
+      <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:var(--terra);margin-bottom:4px">💬 Ask Vet Advisor</div>
+      <div class="chat-wrap">
+        <div class="chat-msgs" id="chat-msgs">
+          <div style="display:flex;align-items:flex-end;gap:8px">
+            <div style="width:30px;height:30px;border-radius:50%;background:var(--terra);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">🐾</div>
+            <div class="bubble-ai">
+              Hi! I'm your Vet Advisor. Full AI responses are coming soon — I'll be able to answer questions about diet, health, behaviour and more for <strong>${esc(scanData?.breed||'your dog')}</strong>. Stay tuned! 🐾
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-row">
+          <input type="text" class="chat-input" id="chat-input" placeholder="Ask about diet, symptoms, behaviour…" disabled/>
+          <button style="padding:11px 16px;border:none;border-radius:12px;background:var(--s2);color:var(--dim);font-size:13px;font-weight:700;cursor:not-allowed" disabled>Send</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ─── RENDER: MORE PANEL ───────────────────────────────────────────────────────
+function renderMorePanel(){
+  const panel=document.getElementById('panel-more');
+  panel.innerHTML=`
+    <div class="rise">
+      <!-- Inner tab switcher -->
+      <div class="inner-tabs">
+        <button class="inner-tab${moreInnerTab==='nearby'?' active':''}" onclick="switchMoreTab('nearby')">Find Nearby Pets</button>
+        <button class="inner-tab${moreInnerTab==='comply'?' active':''}" onclick="switchMoreTab('comply')">Compliance</button>
+      </div>
+      <div id="more-content"></div>
+    </div>`;
+  renderMoreContent();
+}
+
+function switchMoreTab(tab){
+  moreInnerTab=tab;
+  document.querySelectorAll('.inner-tab').forEach(b=>{
+    b.classList.toggle('active', b.textContent.toLowerCase().includes(tab==='nearby'?'nearby':'compliance'));
+  });
+  renderMoreContent();
+}
+
+function renderMoreContent(){
+  const el=document.getElementById('more-content');
+  if(!el) return;
+  if(moreInnerTab==='nearby'){
+    el.innerHTML = buildPetWorldHTML();
+    // Init city chips after render
+    document.querySelectorAll('.pw-city-chip').forEach(btn=>{
+      btn.onclick = function(){ pwSetCity(this.dataset.city); };
+    });
+  } else {
+    const complyData=[
+      {flag:'🇺🇸',name:'United States',reqs:['Rabies vaccine (state law, mandatory)','ISO 15-digit microchip','USDA license if >4 litters/year'],penalty:'Up to $10,000 fine — Animal Welfare Act',link:'aphis.usda.gov/pet-travel'},
+      {flag:'🇪🇺',name:'European Union',reqs:['ISO microchip before travel','EU Animal Health Certificate','Rabies + titre test'],penalty:'Seizure + EU entry ban — Reg. 576/2013',link:'ec.europa.eu/food/animals/pet-movement'},
+      {flag:'🇮🇳',name:'India',reqs:['Municipal registration (₹100–500/yr)','Rabies + distemper certificate','Breeder reg. — PCA Rules 2017'],penalty:'₹50–₹10,000 — PCA Act 1960',link:'awbi.in'},
+    ];
+    el.innerHTML=`
+      <div style="padding:9px 12px;background:rgba(160,112,32,.08);border:1px solid rgba(160,112,32,.22);border-radius:11px;font-size:10.5px;color:var(--amber);margin-bottom:12px">
+        ⚠ Informational only — not legal advice. Consult a licensed authority.
+      </div>
+      ${complyData.map(r=>`
+        <div class="comply-region">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+            <span style="font-size:20px">${r.flag}</span>
+            <span style="font-size:12px;font-weight:700;color:var(--text)">${r.name}</span>
+          </div>
+          ${r.reqs.map(q=>`<div style="font-size:10.5px;color:var(--sub);margin-bottom:3px">• ${q}</div>`).join('')}
+          <div style="font-size:9px;color:#B85C35;font-weight:600;margin-top:6px">⚡ ${r.penalty}</div>
+          <div style="font-size:9px;color:var(--terra);font-weight:600;margin-top:2px">🔗 ${r.link}</div>
+        </div>`).join('')}`;
+  }
+}
+
+// ─── MEAL PLAN — FULL FLOW ───────────────────────────────────────────────────
+let _mpView = 'form';   // 'form' | 'payment' | 'success'
+let _mpPref = 'nonveg'; // 'veg' | 'nonveg'
+let _mpAct  = 'moderate';
+let _mpPM   = 'upi';
+
+function mpOpen(){
+  _mpView = 'form';
+  _mpPref = 'nonveg';
+  _mpAct  = 'moderate';
+  _mpPM   = 'upi';
+  // Show meal plan panel, hide others
+  ['scan','vaccine','explore','askvet','more'].forEach(t=>{
+    const p=document.getElementById('panel-'+t);
+    if(p) p.style.display='none';
+  });
+  const mp = document.getElementById('panel-mealplan');
+  if(mp){ mp.style.display='block'; mpRender(); }
+  // highlight no nav tab (meal plan is a sub-page)
+  document.querySelectorAll('.nav-icon').forEach(i=>i.classList.add('dim'));
+  document.querySelectorAll('.nav-lbl').forEach(l=>l.style.color='var(--dim)');
+}
+
+function mpClose(){
+  const mp = document.getElementById('panel-mealplan');
+  if(mp) mp.style.display='none';
+  switchTab('scan');
+}
+
+function mpRender(){
+  const panel = document.getElementById('panel-mealplan');
+  if(!panel) return;
+  if(_mpView==='form')    { panel.innerHTML = mpFormHTML();    mpBindForm();    return; }
+  if(_mpView==='payment') { panel.innerHTML = mpPaymentHTML(); mpBindPayment(); return; }
+  if(_mpView==='success') { panel.innerHTML = mpSuccessHTML(); return; }
+}
+
+function mpBindForm(){
+  // activity
+  ['low','moderate','high'].forEach(l=>{
+    const btn = document.getElementById('mp-act-'+l);
+    if(btn) btn.classList.toggle('active', l===_mpAct);
+    if(btn) btn.onclick = ()=>{ _mpAct=l; mpBindForm(); };
+  });
+  // preference
+  const veg = document.getElementById('mp-pref-veg');
+  const nveg = document.getElementById('mp-pref-nveg');
+  if(veg){
+    veg.className = 'mp-pref-btn'+(_mpPref==='veg'?' active-veg':'');
+    veg.onclick = ()=>{ _mpPref='veg'; mpBindForm(); };
+  }
+  if(nveg){
+    nveg.className = 'mp-pref-btn'+(_mpPref==='nonveg'?' active-nveg':'');
+    nveg.onclick = ()=>{ _mpPref='nonveg'; mpBindForm(); };
+  }
+}
+
+function mpBindPayment(){
+  ['upi','card','nb','wallet'].forEach(pm=>{
+    const btn = document.getElementById('mp-pm-'+pm);
+    if(btn){
+      btn.classList.toggle('active', pm===_mpPM);
+      btn.onclick=()=>{ _mpPM=pm; mpBindPayment(); };
+    }
+  });
+  const upiField = document.getElementById('mp-upi-field');
+  if(upiField) upiField.style.display = _mpPM==='upi'?'block':'none';
+}
+
+function mpFormHTML(){
+  const breed = scanData?.breed||'';
+  const age   = document.getElementById('pet-age-input')?.value||'';
+  const wt    = document.getElementById('pet-weight-input')?.value||'';
+  return `
+    <!-- Header -->
+    <div style="background:var(--s0);border-bottom:1px solid var(--bord);padding:13px 16px;display:flex;align-items:center;gap:10px;margin:-14px -15px 14px;position:sticky;top:-14px;z-index:10">
+      <button onclick="mpClose()" style="background:none;border:none;font-size:12px;font-weight:700;color:var(--terra);cursor:pointer;padding:0;flex-shrink:0">← Back</button>
+      <div style="flex:1;text-align:center">
+        <div style="font-size:14px;font-weight:700;color:var(--text)">Meal Plan Customiser</div>
+        <div style="font-size:10px;color:var(--dim)">Personalised by trusted vets</div>
+      </div>
+      <div style="width:40px"></div>
+    </div>
+
+    <div style="padding:10px 12px;background:var(--terra-a);border-radius:11px;border:1px solid rgba(196,113,74,.25);font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:4px">
+      🍽️ Fill in your dog's details and our vets will create a personalised weekly meal plan.
+    </div>
+
+    <!-- Form card -->
+    <div class="card rise" style="overflow:hidden;margin-top:12px">
+
+      <div class="mp-section">
+        <div class="mp-field-label">Breed</div>
+        <input class="mp-input" type="text" placeholder="e.g. Beagle, Golden Retriever…" value="${esc(breed)}"/>
+      </div>
+
+      <div class="mp-section">
+        <div class="mp-field-label">Current Age</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input class="mp-input" type="number" placeholder="2" min="0" max="20" style="width:70px" value="${age.replace(/[^0-9]/g,'')||''}"/>
+          <span style="font-size:13px;color:var(--sub)">yrs</span>
+          <input class="mp-input" type="number" placeholder="0" min="0" max="11" style="width:70px"/>
+          <span style="font-size:13px;color:var(--sub)">months</span>
+        </div>
+      </div>
+
+      <div class="mp-section">
+        <div class="mp-field-label">Current Weight</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input class="mp-input" type="number" placeholder="12" min="0.5" max="100" step="0.5" style="width:90px" value="${wt.replace(/[^0-9.]/g,'')||''}"/>
+          <span style="font-size:13px;color:var(--sub)">kg</span>
+        </div>
+      </div>
+
+      <div class="mp-section">
+        <div class="mp-field-label">Birth Date (approx.)</div>
+        <div style="display:flex;gap:8px">
+          <select class="mp-input" style="flex:1">
+            <option>Month</option>
+            ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map(m=>`<option>${m}</option>`).join('')}
+          </select>
+          <select class="mp-input" style="flex:1">
+            <option>Year</option>
+            ${[2026,2025,2024,2023,2022,2021,2020,2019,2018,2017,2016].map(y=>`<option>${y}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <div class="mp-section">
+        <div class="mp-field-label">Activity Level</div>
+        <div style="display:flex;gap:8px">
+          <div id="mp-act-low"      class="mp-act-btn">🐢 Low</div>
+          <div id="mp-act-moderate" class="mp-act-btn active">🐕 Moderate</div>
+          <div id="mp-act-high"     class="mp-act-btn">⚡ High</div>
+        </div>
+      </div>
+
+      <div class="mp-section">
+        <div class="mp-field-label">Meal Preference</div>
+        <div style="display:flex;gap:10px">
+          <div id="mp-pref-veg" class="mp-pref-btn" style="padding:11px 8px">
+            <div style="font-size:20px;margin-bottom:4px">🥦</div>
+            <div style="font-size:12px;font-weight:700;color:${_mpPref==='veg'?'var(--sage)':'var(--sub)'}">Vegetarian</div>
+            <div style="font-size:10px;color:var(--dim);margin-top:2px">Plant-based</div>
+          </div>
+          <div id="mp-pref-nveg" class="mp-pref-btn ${_mpPref==='nonveg'?'active-nveg':''}" style="padding:11px 8px">
+            <div style="font-size:20px;margin-bottom:4px">🍗</div>
+            <div style="font-size:12px;font-weight:700;color:${_mpPref==='nonveg'?'var(--terra)':'var(--sub)'}">Non-Veg</div>
+            <div style="font-size:10px;color:var(--dim);margin-top:2px">Meat &amp; fish</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mp-section" style="border-bottom:none">
+        <div class="mp-field-label">Health Concerns <span style="font-size:9px;text-transform:none;letter-spacing:0;color:var(--dim)">(optional)</span></div>
+        <label style="display:flex;align-items:center;gap:9px;margin-bottom:8px;cursor:pointer">
+          <input type="checkbox" style="width:16px;height:16px;accent-color:var(--terra);flex-shrink:0"/>
+          <span style="font-size:12px;color:var(--text)">Hip / joint issues</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:9px;margin-bottom:8px;cursor:pointer">
+          <input type="checkbox" style="width:16px;height:16px;accent-color:var(--terra);flex-shrink:0"/>
+          <span style="font-size:12px;color:var(--text)">Skin allergies or sensitivities</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:9px;margin-bottom:10px;cursor:pointer">
+          <input type="checkbox" style="width:16px;height:16px;accent-color:var(--terra);flex-shrink:0"/>
+          <span style="font-size:12px;color:var(--text)">Weight management needed</span>
+        </label>
+        <textarea class="mp-input" placeholder="Describe any other health concerns…" style="resize:none;height:72px"></textarea>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div style="display:flex;flex-direction:column;gap:9px;margin-top:14px;padding-bottom:10px">
+      <button onclick="_mpView='payment';mpRender()" style="width:100%;padding:14px;border:none;border-radius:13px;background:var(--terra);color:#fff;font-size:14px;font-weight:700;cursor:pointer">Create Meal Plan</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+        <button style="padding:12px;border:1px solid var(--terra);border-radius:12px;background:transparent;color:var(--terra);font-size:13px;font-weight:600;cursor:pointer">Save Draft</button>
+        <button onclick="mpClose()" style="padding:12px;border:1px solid var(--bords);border-radius:12px;background:transparent;color:var(--sub);font-size:13px;font-weight:600;cursor:pointer">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function mpPaymentHTML(){
+  return `
+    <div style="background:var(--s0);border-bottom:1px solid var(--bord);padding:13px 16px;display:flex;align-items:center;gap:10px;margin:-14px -15px 14px;position:sticky;top:-14px;z-index:10">
+      <button onclick="_mpView='form';mpRender()" style="background:none;border:none;font-size:12px;font-weight:700;color:var(--terra);cursor:pointer;padding:0">← Back</button>
+      <div style="flex:1;text-align:center;font-size:14px;font-weight:700;color:var(--text)">Complete Payment</div>
+      <div style="width:40px"></div>
+    </div>
+
+    <!-- Order summary -->
+    <div class="card rise" style="overflow:hidden;margin-bottom:12px">
+      <div style="padding:14px 15px;border-bottom:1px solid var(--bord)">
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.13em;color:var(--dim);margin-bottom:10px">Order Summary</div>
+        <div style="display:flex;align-items:center;gap:11px">
+          <div style="width:44px;height:44px;border-radius:11px;background:var(--terra-a);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🍽️</div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text)">Personalised Meal Plan</div>
+            <div style="font-size:11px;color:var(--sub)">Vet-approved · Breed-specific · 4-week plan</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:12px 15px;border-bottom:1px solid var(--bord)">
+        <div style="display:flex;justify-content:space-between;margin-bottom:7px">
+          <span style="font-size:12.5px;color:var(--sub)">Meal Plan (one-time)</span>
+          <span style="font-size:12.5px;font-weight:700;color:var(--text)">₹41.53</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:7px">
+          <span style="font-size:12.5px;color:var(--sub)">GST (18%)</span>
+          <span style="font-size:12.5px;font-weight:700;color:var(--text)">₹7.47</span>
+        </div>
+        <div style="height:1px;background:var(--bord);margin:8px 0"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:14px;font-weight:700;color:var(--text)">Total</span>
+          <span style="font-size:22px;font-weight:700;color:var(--terra)">₹49</span>
+        </div>
+      </div>
+      <div style="padding:10px 15px;background:rgba(93,148,105,.06);display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+        <div style="font-size:10px;color:var(--sage)">🔒 Secure payment</div>
+        <div style="font-size:10px;color:var(--sage)">↩ Instant refund</div>
+        <div style="font-size:10px;color:var(--sage)">📄 PDF in 24hrs</div>
+      </div>
+    </div>
+
+    <!-- Payment methods -->
+    <div class="card rise" style="overflow:hidden;margin-bottom:12px">
+      <div style="padding:12px 15px;border-bottom:1px solid var(--bord);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.13em;color:var(--dim)">Pay With</div>
+      <div style="padding:10px 12px;display:flex;gap:8px;flex-wrap:wrap">
+        <div id="mp-pm-upi"    class="mp-pm-btn active">📱 UPI</div>
+        <div id="mp-pm-card"   class="mp-pm-btn">💳 Card</div>
+        <div id="mp-pm-nb"     class="mp-pm-btn">🏦 Net Banking</div>
+        <div id="mp-pm-wallet" class="mp-pm-btn">👛 Wallet</div>
+      </div>
+      <div id="mp-upi-field" style="padding:12px 15px;border-top:1px solid var(--bord)">
+        <div style="font-size:10.5px;color:var(--sub);margin-bottom:7px">Enter UPI ID</div>
+        <input class="mp-input" type="text" placeholder="yourname@upi"/>
+        <div style="font-size:10px;color:var(--dim);margin-top:5px">e.g. name@okaxis · name@paytm · name@ybl</div>
+      </div>
+    </div>
+
+    <button onclick="_mpView='success';mpRender()" style="width:100%;padding:15px;border:none;border-radius:13px;background:linear-gradient(135deg,var(--terra),var(--terra-d));color:#fff;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(196,113,74,.35);margin-bottom:10px">
+      Pay ₹49 →
+    </button>
+    <div style="text-align:center;font-size:10px;color:var(--dim);padding-bottom:10px">Powered by Razorpay · 256-bit SSL encrypted</div>`;
+}
+
+function mpSuccessHTML(){
+  return `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 24px;text-align:center;gap:14px;min-height:400px">
+      <div style="font-size:60px">🎉</div>
+      <div style="font-family:var(--serif);font-size:22px;font-weight:700;color:var(--terra)">Payment Successful!</div>
+      <div style="font-size:13px;color:var(--sub);line-height:1.7;max-width:280px">Your personalised meal plan is being prepared by our vet team and will be ready within 24 hours.</div>
+      <div style="padding:12px 18px;border-radius:12px;background:rgba(93,148,105,.1);border:1px solid rgba(93,148,105,.28);font-size:12px;color:var(--sage);font-weight:700">✅ ₹49 paid · Order confirmed</div>
+      <button onclick="mpClose()" style="margin-top:10px;padding:13px 28px;border:none;border-radius:12px;background:var(--terra);color:#fff;font-size:13px;font-weight:700;cursor:pointer">Back to Home</button>
+    </div>`;
+}
+
+// ─── PET WORLD — FIND NEARBY PETS ───────────────────────────────────────────
+// Dummy pet data (same breed within 50km radius)
+// In production this would come from a backend API
+const PW_PETS = [
+  {id:1, name:'Buddy',   age:'2 yrs', sex:'Male',   owner:'Rahul M.',  dist:'1.2 km', score:78,  compat:95,  tags:['Vaccinated','Friendly'],  px:30, py:22, col:'#C4714A', locked:false},
+  {id:2, name:'Bella',   age:'1 yr',  sex:'Female', owner:'Priya S.',  dist:'3.4 km', score:91,  compat:100, tags:['Vaccinated','Looking to breed'], px:14, py:46, col:'#5D9469', locked:false},
+  {id:3, name:'Max',     age:'3 yrs', sex:'Male',   owner:'Ankit R.',  dist:'5.8 km', score:65,  compat:82,  tags:['Vaccinated'],              px:59, py:40, col:'#6A5AAA', locked:true},
+  {id:4, name:'Simba',   age:'4 yrs', sex:'Male',   owner:'Neha K.',   dist:'8.1 km', score:84,  compat:91,  tags:['Friendly'],                px:43, py:68, col:'#A07020', locked:true},
+];
+
+const PW_CITIES = ['Mumbai','Delhi','Bangalore','Chennai','Pune','Hyderabad','Kolkata','Ahmedabad'];
+let _pwCity = 'Mumbai';
+let _pwOpenPet = null;
+
+function pwScoreCol(s){ return s>=80?'var(--sage)':s>=60?'var(--amber)':'#B85C35'; }
+
+function pwOpen(){
+  // Navigate to More tab, nearby sub-tab — same page as More → Find Nearby Pets
+  switchTab('more');
+  moreInnerTab='nearby';
+  renderMorePanel();
+}
+
+function pwSetCity(city){
+  _pwCity = city;
+  // Re-render just the city chips
+  document.querySelectorAll('.pw-city-chip').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.city === city);
+  });
+  // Update the badge text
+  const badge = document.getElementById('pw-radius-badge');
+  if(badge) badge.textContent = '📍 '+city+' · 50km';
+}
+
+function pwOpenProfile(id){
+  _pwOpenPet = PW_PETS.find(p=>p.id===id);
+  if(!_pwOpenPet) return;
+  // Inject backdrop + profile sheet
+  let sheet = document.getElementById('pw-profile-wrap');
+  if(!sheet){
+    sheet = document.createElement('div');
+    sheet.id = 'pw-profile-wrap';
+    sheet.style.cssText = 'position:absolute;inset:0;z-index:199;pointer-events:auto';
+    const wrap = document.querySelector('.wrap');
+    if(wrap){
+      if(getComputedStyle(wrap).position==='static') wrap.style.position='relative';
+      wrap.appendChild(sheet);
+    } else {
+      document.body.appendChild(sheet);
+    }
+  }
+  sheet.innerHTML = buildPetProfileHTML(_pwOpenPet);
+}
+
+function pwCloseProfile(){
+  const el = document.getElementById('pw-profile-wrap');
+  if(el) el.remove();
+  _pwOpenPet = null;
+}
+
+function buildPetProfileHTML(p){
+  const tagHtml = p.tags.map(t=>`<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:rgba(93,148,105,.1);color:#3E7A4A;border:0.5px solid rgba(93,148,105,.25)">${esc(t)}</span>`).join('');
+  return `
+    <div class="pw-profile-backdrop" onclick="pwCloseProfile()"></div>
+    <div class="pw-profile-sheet rise">
+      <div style="padding:10px 0 4px;display:flex;justify-content:center">
+        <div style="width:36px;height:4px;border-radius:2px;background:var(--s2)"></div>
+      </div>
+
+      <!-- Pet identity -->
+      <div style="padding:13px 16px 14px;border-bottom:1px solid var(--bord)">
+        <div style="display:flex;gap:13px;align-items:flex-start;margin-bottom:12px">
+          <div style="width:68px;height:68px;border-radius:13px;background:${p.col}18;border:0.5px solid ${p.col}30;display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0">🐾</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-family:var(--serif);font-size:22px;font-weight:700;color:var(--terra);line-height:1;margin-bottom:4px">${esc(p.name)}</div>
+            <div style="font-size:11px;color:var(--sub);margin-bottom:2px">${esc(scanData?.breed||'Dog')} · ${esc(p.age)} · ${esc(p.sex)}</div>
+            <div style="font-size:11px;color:var(--sub);margin-bottom:8px">Owner: ${esc(p.owner)} · ${esc(p.dist)} away</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">${tagHtml}</div>
+          </div>
+        </div>
+        <!-- Add Buddy — locked, shows feedback popup -->
+        <button onclick="pwFeedback('buddy')" style="width:100%;padding:12px;border:none;border-radius:12px;background:var(--terra);color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;opacity:.93">
+          <span>🔒</span> Add Buddy
+          <span style="font-size:10px;padding:2px 8px;border-radius:8px;background:rgba(255,255,255,.25);margin-left:2px">Premium</span>
+        </button>
+      </div>
+
+      <!-- Scores -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--bord)">
+        <div style="padding:13px;border-right:1px solid var(--bord);text-align:center">
+          <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:var(--dim);margin-bottom:5px">Health / Energy Score</div>
+          <div style="font-size:34px;font-weight:700;color:${pwScoreCol(p.score)};line-height:1">${p.score}</div>
+          <div style="font-size:9px;color:var(--dim);margin-top:3px">${p.score>=80?'Excellent':p.score>=60?'Good':'Fair'}</div>
+        </div>
+        <div style="padding:13px;text-align:center">
+          <div style="font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.14em;color:var(--dim);margin-bottom:5px">Breed Compatibility</div>
+          <div style="font-size:34px;font-weight:700;color:var(--terra);line-height:1">${p.compat}%</div>
+          <div style="font-size:9px;color:var(--dim);margin-top:3px">Same breed match</div>
+        </div>
+      </div>
+
+      <!-- Owner + Send Message — locked -->
+      <div style="padding:11px 16px;border-bottom:1px solid var(--bord);display:flex;align-items:center;gap:11px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--terra-a);border:0.5px solid rgba(196,113,74,.2);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0">👤</div>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:700;color:var(--text)">${esc(p.owner)}</div>
+          <div style="font-size:10.5px;color:var(--sub)">Pet parent · ${esc(_pwCity)}</div>
+        </div>
+        <button onclick="pwFeedback('message')" style="padding:9px 13px;border:1px solid var(--bords);border-radius:11px;background:var(--s1);color:var(--sub);font-size:11.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px">
+          <span>🔒</span> Send Message
+        </button>
+      </div>
+
+      <!-- Generate Future Puppies — visible, premium tooltip on hover/tap -->
+      <div style="padding:14px 16px">
+        <div style="position:relative;overflow:visible"
+             onmouseenter="document.getElementById('pw-gpup-tip').style.display='block'"
+             onmouseleave="document.getElementById('pw-gpup-tip').style.display='none'"
+             onclick="document.getElementById('pw-gpup-tip').style.display='block'">
+          <!-- Tooltip -->
+          <div id="pw-gpup-tip" style="display:none;position:absolute;top:-42px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--s0);font-size:10.5px;font-weight:700;padding:7px 13px;border-radius:9px;white-space:nowrap;z-index:20;pointer-events:none">
+            👑 Premium Feature — Upgrade to unlock
+            <div style="position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid var(--text)"></div>
+          </div>
+          <!-- Card — fully visible, no blur -->
+          <div style="border-radius:13px;overflow:hidden;border:1px solid rgba(201,160,74,.4);background:linear-gradient(145deg,rgba(250,240,220,.4),rgba(250,247,242,.6));cursor:pointer">
+            <div style="padding:13px 15px;display:flex;align-items:center;gap:12px">
+              <div style="width:40px;height:40px;border-radius:10px;background:rgba(201,160,74,.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✨</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Generate Future Puppies</div>
+                <div style="font-size:11px;color:var(--sub)">Predict offspring traits from ${esc(p.name)} + your dog</div>
+              </div>
+              <span style="font-size:20px">👑</span>
+            </div>
+            <div style="padding:10px 15px;border-top:0.5px solid rgba(201,160,74,.3);background:rgba(201,160,74,.08);text-align:center">
+              <div style="font-size:14px;font-weight:700;color:var(--amber)">Breeding Compatibility: ${p.compat}%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:0 16px 20px">
+        <button onclick="pwCloseProfile()" style="width:100%;padding:11px;border:1px solid var(--bord);border-radius:12px;background:none;font-size:12px;color:var(--sub);cursor:pointer">Close</button>
+      </div>
+    </div>
+
+    <!-- Feedback popup — injected alongside sheet, removed on close -->
+    <div id="pw-fb-backdrop" style="display:none;position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:300" onclick="pwCloseFeedback()"></div>
+    <div id="pw-fb-popup" style="display:none;position:absolute;bottom:0;left:0;right:0;background:var(--s0);border-radius:20px 20px 0 0;z-index:301;padding:20px 20px 28px;box-shadow:0 -4px 20px rgba(44,36,22,.15)">
+      <div style="width:32px;height:3.5px;border-radius:2px;background:var(--s2);margin:0 auto 18px"></div>
+      <div id="pw-fb-q" style="font-size:15px;font-weight:700;color:var(--text);line-height:1.5;margin-bottom:18px;text-align:center"></div>
+      <div id="pw-fb-yn" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <button onclick="pwFbAnswer(this,'yes')" style="padding:13px;border:1px solid var(--bords);border-radius:12px;background:var(--s1);font-size:13px;font-weight:700;color:var(--text);cursor:pointer">👍 Yes!</button>
+        <button onclick="pwFbAnswer(this,'no')"  style="padding:13px;border:1px solid var(--bords);border-radius:12px;background:var(--s1);font-size:13px;font-weight:700;color:var(--text);cursor:pointer">👎 No</button>
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;color:var(--sub);margin-bottom:7px">Want to share more? (optional)</div>
+        <textarea id="pw-fb-text" placeholder="Write your thoughts here…" style="width:100%;padding:10px 12px;border:1px solid var(--bords);border-radius:11px;font-size:12px;color:var(--text);background:var(--s1);outline:none;resize:none;height:80px;font-family:var(--sans);box-sizing:border-box"></textarea>
+      </div>
+      <button onclick="pwSubmitFeedback()" style="width:100%;padding:13px;border:none;border-radius:12px;background:var(--terra);color:#fff;font-size:13px;font-weight:700;cursor:pointer">Submit Feedback</button>
+      <div id="pw-fb-thanks" style="display:none;text-align:center;padding:20px 0 4px">
+        <div style="font-size:28px;margin-bottom:8px">🙏</div>
+        <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:5px">Thank you!</div>
+        <div style="font-size:12px;color:var(--sub)">Your feedback helps us build better features.</div>
+      </div>
+    </div>`;
+}
+
+// ── Feedback helpers ──────────────────────────────────────────────────────────
+var _pwFbType = null;
+var _pwFbQuestions = {
+  buddy:   'Do you think adding a pet buddy would be interesting?',
+  message: 'Would you like to talk to a pet parent with the same breed for useful tips?',
+};
+
+window.pwFeedback = function(type){
+  _pwFbType = type;
+  var q = document.getElementById('pw-fb-q');
+  var yn = document.getElementById('pw-fb-yn');
+  var txt = document.getElementById('pw-fb-text');
+  var thanks = document.getElementById('pw-fb-thanks');
+  var sub = document.querySelector('#pw-fb-popup button:last-of-type');
+  if(!q) return;
+  q.textContent = _pwFbQuestions[type];
+  yn.style.display = 'grid';
+  if(txt) txt.value = '';
+  if(thanks) thanks.style.display = 'none';
+  if(sub) sub.style.display = 'block';
+  // reset button colours
+  yn.querySelectorAll('button').forEach(function(b){
+    b.style.background='var(--s1)'; b.style.borderColor='var(--bords)'; b.style.color='var(--text)';
+  });
+  document.getElementById('pw-fb-backdrop').style.display = 'block';
+  document.getElementById('pw-fb-popup').style.display   = 'block';
+};
+
+window.pwCloseFeedback = function(){
+  var bd = document.getElementById('pw-fb-backdrop');
+  var pp = document.getElementById('pw-fb-popup');
+  if(bd) bd.style.display = 'none';
+  if(pp) pp.style.display = 'none';
+  _pwFbType = null;
+};
+
+window.pwFbAnswer = function(btn, ans){
+  var yn = document.getElementById('pw-fb-yn');
+  yn.querySelectorAll('button').forEach(function(b){
+    b.style.background='var(--s1)'; b.style.borderColor='var(--bords)'; b.style.color='var(--text)';
+  });
+  btn.style.background='var(--terra)'; btn.style.borderColor='var(--terra)'; btn.style.color='#fff';
+};
+
+window.pwSubmitFeedback = function(){
+  var yn    = document.getElementById('pw-fb-yn');
+  var txtW  = document.getElementById('pw-fb-text')?.parentElement;
+  var thanks= document.getElementById('pw-fb-thanks');
+  var sub   = document.querySelector('#pw-fb-popup button:last-of-type');
+  if(yn)    yn.style.display    = 'none';
+  if(txtW)  txtW.style.display  = 'none';
+  if(thanks)thanks.style.display= 'block';
+  if(sub)   sub.style.display   = 'none';
+  setTimeout(window.pwCloseFeedback, 2400);
+};
+
+function buildPetWorldHTML(){
+  const breed = scanData?.breed || 'your breed';
+  const cityChips = PW_CITIES.map(c=>`<div class="pw-city-chip${c===_pwCity?' active':''}" data-city="${c}">${c}</div>`).join('');
+
+  // Map pins
+  const pins = PW_PETS.map(p=>{
+    const cls = p.locked ? 'pw-pin pw-pin-locked' : 'pw-pin';
+    const label = p.locked ? '🔒 Pet' : `🐾 ${p.name}`;
+    const onclick = p.locked ? '' : `onclick="pwOpenProfile(${p.id})"`;
+    return `<div class="${cls}" style="left:${p.px}%;top:${p.py}%" ${onclick}>
+      <div class="pw-pin-bubble" style="background:${p.locked?'#888':p.col};box-shadow:0 2px 8px ${p.locked?'rgba(0,0,0,.2)':p.col+'55'}">${label}</div>
+      <div class="pw-pin-tail" style="border-top:7px solid ${p.locked?'#888':p.col}"></div>
+    </div>`;
+  }).join('');
+
+  // Pet list rows
+  const listRows = PW_PETS.map((p,i)=>{
+    if(!p.locked){
+      return `<div class="pw-list-row" onclick="pwOpenProfile(${p.id})">
+        <div style="width:38px;height:38px;border-radius:10px;background:${p.col}18;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🐾</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12.5px;font-weight:700;color:var(--text)">${esc(p.name)} <span style="font-size:10px;color:var(--sub);font-weight:400">· ${esc(p.age)} · ${esc(p.sex)}</span></div>
+          <div style="font-size:10.5px;color:var(--sub);margin-top:1px">${esc(breed)} · ${esc(p.dist)} away</div>
+        </div>
+        <div style="font-size:18px;font-weight:700;color:${pwScoreCol(p.score)};flex-shrink:0">${p.score}</div>
+        <div style="font-size:18px;color:var(--dim);margin-left:4px">›</div>
+      </div>`;
+    } else {
+      return `<div class="pw-locked-row">
+        <div class="pw-list-row" style="filter:blur(2.5px);pointer-events:none;user-select:none">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🐾</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12.5px;font-weight:700;color:var(--text)">${esc(p.name)} · ${esc(p.age)} · ${esc(p.sex)}</div>
+            <div style="font-size:10.5px;color:var(--sub);margin-top:1px">${esc(breed)} · ${esc(p.dist)} away</div>
+          </div>
+          <div style="font-size:18px;font-weight:700;color:var(--dim)">${p.score}</div>
+        </div>
+        <div class="pw-locked-overlay">
+          <span style="font-size:14px">👑</span>
+          <span style="font-size:11.5px;font-weight:700;color:var(--amber)">Unlock Premium to view</span>
+          <span style="padding:4px 11px;border-radius:9px;background:rgba(160,112,32,.15);border:0.5px solid rgba(160,112,32,.35);font-size:10.5px;color:var(--amber);font-weight:700;cursor:pointer">Upgrade</span>
+        </div>
+      </div>`;
+    }
+  }).join('');
+
+  return `
+    <!-- MAP -->
+    <div class="pw-map">
+      <div class="pw-map-water"></div>
+      <div class="pw-map-park" style="left:8%;top:10%;width:18%;height:22%"></div>
+      <div class="pw-map-park" style="left:55%;top:52%;width:12%;height:16%"></div>
+      <div class="pw-map-block" style="left:5%;top:5%;width:14%;height:8%"></div>
+      <div class="pw-map-block" style="left:26%;top:6%;width:22%;height:11%"></div>
+      <div class="pw-map-block" style="left:5%;top:38%;width:16%;height:14%"></div>
+      <div class="pw-map-block" style="left:30%;top:36%;width:20%;height:16%"></div>
+      <div class="pw-map-block" style="left:5%;top:65%;width:18%;height:20%"></div>
+      <div class="pw-map-block" style="left:30%;top:66%;width:24%;height:20%"></div>
+      <div class="pw-map-block" style="left:55%;top:10%;width:18%;height:13%"></div>
+      <div class="pw-map-road-h" style="left:0;top:31%;width:80%"></div>
+      <div class="pw-map-road-h" style="left:0;top:60%;width:80%"></div>
+      <div class="pw-map-road-v" style="left:22%;top:0;height:100%"></div>
+      <div class="pw-map-road-v" style="left:52%;top:0;height:100%"></div>
+      <div class="pw-map-road-main-h" style="left:0;top:48%;width:80%"></div>
+      <div class="pw-map-road-main-v" style="left:35%;top:0;height:100%"></div>
+      ${pins}
+      <div style="position:absolute;bottom:4px;right:6px;font-size:8px;color:rgba(0,0,0,.4)">© CartoDB · © OpenStreetMap</div>
+      <div id="pw-radius-badge" style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,.92);border-radius:8px;padding:4px 9px;font-size:9.5px;color:#555;box-shadow:0 1px 4px rgba(0,0,0,.1)">📍 ${esc(_pwCity)} · 50km</div>
+      <div style="position:absolute;bottom:12px;left:10px;background:#fff;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,.12);overflow:hidden">
+        <div style="padding:4px 9px;font-size:14px;color:#555;border-bottom:0.5px solid #eee;line-height:1.4;text-align:center">+</div>
+        <div style="padding:4px 9px;font-size:14px;color:#555;line-height:1.4;text-align:center">−</div>
+      </div>
+    </div>
+
+    <!-- CITY SELECTOR -->
+    <div style="padding:9px 12px;display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--bord);border-bottom:1px solid var(--bord)">
+      ${cityChips}
+    </div>
+
+    <!-- PET LIST -->
+    <div style="border-top:0 solid var(--bord)">
+      <div style="padding:9px 15px;border-bottom:1px solid var(--bord);display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:12.5px;font-weight:700;color:var(--text)">${esc(breed.split(' ')[0]+'s')} Nearby</div>
+        <div style="font-size:10px;color:var(--sub)">${PW_PETS.length} found · 50km</div>
+      </div>
+      ${listRows}
+    </div>`;
+}
+
+// ─── HEALTH CHECKS ────────────────────────────────────────────────────────────
+const HC_ITEMS = [
+  {id:0,icon:'🐾',title:'Daily Exercise',  sub:'30 min walk',     qs:['Completed 30-min walk today','Had active playtime (fetch/run)','No limping or fatigue noticed','Drinking water after exercise']},
+  {id:1,icon:'🥗',title:'Nutrition & Meals',sub:'Feed balanced diet',qs:['Fed full recommended portion','No table scraps given today','Fresh water available all day','No vomiting or food refusal']},
+  {id:2,icon:'\u2702\ufe0f',title:'Grooming',         sub:'Brush & clean',   qs:['Brushed coat thoroughly','Checked for ticks/fleas','Paws and nails inspected','Ears and eyes cleaned']},
+  {id:3,icon:'🦷',title:'Dental Care',     sub:'Teeth cleaning',  qs:['Brushed teeth today','No bad breath noticed','Gums look pink and healthy','No difficulty chewing']},
+  {id:4,icon:'🩺',title:'Health Checkup',  sub:'Monthly exam',    qs:['No unusual lethargy','Normal bowel movements','No scratching or skin issues','Weight appears stable']},
+];
+
+let HC_S     = [];
+let HC_ORDER = [];
+let HC_OPEN  = -1;
+
+function initHealthChecks(){
+  HC_S     = HC_ITEMS.map(it=>({checked:it.qs.map(()=>false)}));
+  HC_ORDER = HC_ITEMS.map(it=>it.id);
+  HC_OPEN  = -1;
+  const list = document.getElementById('hc-rows');
+  if(!list) return;
+  list.innerHTML = '';
+  HC_ORDER.forEach(id=>list.appendChild(hcBuildRow(id)));
+  hcFixBorders();
+  hcUpdateHeader();
+}
+
+function hcPct(id){ const c=HC_S[id].checked; return Math.round(c.filter(Boolean).length/c.length*100); }
+function hcDone(id){ return HC_S[id].checked.every(Boolean); }
+
+function hcUpdateHeader(){
+  const dc = HC_ITEMS.filter(it=>hcDone(it.id)).length;
+  const counter = document.getElementById('hc-counter');
+  const bar     = document.getElementById('hc-bar');
+  if(!counter||!bar) return;
+  counter.textContent = dc+' / 5 Completed';
+  counter.style.color = dc===5?'var(--sage)':'var(--terra)';
+  bar.style.width     = (dc/5*100)+'%';
+  bar.style.background= dc===5?'var(--sage)':'var(--terra)';
+}
+
+function hcFixBorders(){
+  const rows = document.querySelectorAll('#hc-rows>div[data-hrid]');
+  rows.forEach((r,i)=>{ r.style.borderBottom = i<rows.length-1?'1px solid var(--bord)':'none'; });
+}
+
+function hcSortedOrder(){ return [...HC_ORDER].sort((a,b)=>hcPct(a)-hcPct(b)); }
+
+function hcOpenPanel(id){
+  const wrap = document.querySelector('#hc-rows>div[data-hrid="'+id+'"]');
+  if(!wrap) return;
+  const panel = wrap.querySelector('.hcp-panel');
+  panel.style.maxHeight='420px'; panel.style.opacity='1';
+}
+function hcClosePanel(id){
+  const wrap = document.querySelector('#hc-rows>div[data-hrid="'+id+'"]');
+  if(!wrap) return;
+  const panel = wrap.querySelector('.hcp-panel');
+  panel.style.maxHeight='0'; panel.style.opacity='0';
+}
+
+function hcFlipReorder(newOrder){
+  const list = document.getElementById('hc-rows');
+  if(!list) return;
+  const before = {};
+  newOrder.forEach(id=>{
+    const el = document.querySelector('#hc-rows>div[data-hrid="'+id+'"]');
+    if(el) before[id] = el.getBoundingClientRect().top;
+  });
+  HC_ORDER = newOrder;
+  HC_ORDER.forEach(id=>{
+    const el = document.querySelector('#hc-rows>div[data-hrid="'+id+'"]');
+    if(el){ hcRefreshHeader(id); list.appendChild(el); }
+  });
+  hcFixBorders();
+  HC_ORDER.forEach(id=>{
+    const el = document.querySelector('#hc-rows>div[data-hrid="'+id+'"]');
+    if(!el) return;
+    const after = el.getBoundingClientRect().top;
+    const delta = (before[id]||0) - after;
+    if(Math.abs(delta)<1) return;
+    el.style.transition='none';
+    el.style.transform='translateY('+delta+'px)';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      el.style.transition='transform .45s cubic-bezier(.4,0,.2,1)';
+      el.style.transform='translateY(0)';
+    }));
+  });
+}
+
+function hcRefreshHeader(id){
+  const wrap = document.querySelector('#hc-rows>div[data-hrid="'+id+'"]');
+  if(!wrap) return;
+  const item=HC_ITEMS[id]; const s=HC_S[id];
+  const p=hcPct(id); const d=hcDone(id);
+
+  const hdr = wrap.querySelector('.hcp-hdr');
+  hdr.style.background = d?'rgba(93,148,105,.05)':p>0?'rgba(186,117,23,.04)':'var(--s0)';
+
+  const icon = wrap.querySelector('.hcp-icon');
+  icon.style.background  = d?'rgba(93,148,105,.12)':p>0?'rgba(186,117,23,.08)':'var(--s1)';
+  icon.style.borderColor = d?'rgba(93,148,105,.28)':p>0?'rgba(186,117,23,.22)':'var(--bord)';
+
+  const titleEl = wrap.querySelector('.hcp-title');
+  titleEl.style.color = d?'var(--sage)':p>0?'var(--amber)':'var(--text)';
+  titleEl.style.textDecoration = d?'line-through':'none';
+
+  const subEl = wrap.querySelector('.hcp-sub');
+  if(p>0&&!d){
+    subEl.innerHTML='<div style="display:flex;align-items:center;gap:6px;margin-top:4px">'
+      +'<div style="height:3px;width:80px;background:var(--s2);border-radius:2px;overflow:hidden">'
+      +'<div style="height:100%;width:'+p+'%;background:var(--amber);border-radius:2px;transition:width .3s"></div></div>'
+      +'<span style="font-size:10px;color:var(--amber)">'+p+'%</span></div>';
+  } else {
+    subEl.innerHTML='<span style="font-size:10.5px;color:var(--dim)">'+item.sub+'</span>';
+  }
+
+  const btn = wrap.querySelector('.hcp-btn');
+  btn.style.background = d?'var(--sage)':p>0?'var(--amber)':'var(--terra)';
+  btn.style.cursor = d?'default':'pointer';
+  btn.textContent = d?'Done \u2713':p>0?(s.checked.filter(Boolean).length+' / '+item.qs.length+' \u2713'):'Check \u2192';
+}
+
+// KEY FIX: target each checkbox by unique data-hcid, update only that element
+function hcRefreshCheckbox(id,qi){
+  const box = document.querySelector('#hc-rows [data-hcid="'+id+'-'+qi+'"]');
+  if(!box) return;
+  const chk = HC_S[id].checked[qi];
+
+  box.style.border     = '1px solid '+(chk?'rgba(93,148,105,.35)':'var(--bord)');
+  box.style.background = chk?'rgba(93,148,105,.07)':'var(--s0)';
+
+  const tick = box.querySelector('.hcp-tick');
+  if(tick){
+    tick.style.border     = '1.5px solid '+(chk?'var(--sage)':'var(--dim)');
+    tick.style.background = chk?'var(--sage)':'transparent';
+    tick.innerHTML        = chk?'<svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4l3 3 5-6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>':'';
+  }
+
+  const lbl = box.querySelector('.hcp-qlbl');
+  if(lbl){
+    lbl.style.color      = chk?'var(--sage)':'var(--text)';
+    lbl.style.fontWeight = chk?'600':'400';
+  }
+}
+
+window.hcToggle = function(id){
+  if(hcDone(id)) return;
+  const wasOpen = (HC_OPEN===id);
+  if(!wasOpen && HC_OPEN!==-1){ hcClosePanel(HC_OPEN); hcRefreshHeader(HC_OPEN); }
+  HC_OPEN = wasOpen?-1:id;
+  if(wasOpen){
+    hcClosePanel(id); hcRefreshHeader(id);
+    const newOrder = hcSortedOrder();
+    const changed  = newOrder.some((v,i)=>v!==HC_ORDER[i]);
+    if(changed) hcFlipReorder(newOrder); else hcFixBorders();
+  } else {
+    hcOpenPanel(id); hcRefreshHeader(id);
+  }
+  hcUpdateHeader();
+};
+
+window.hcCheck = function(id,qi,e){
+  e.stopPropagation();
+  if(hcDone(id)) return;
+  const wasDone = HC_S[id].checked[qi];
+  HC_S[id].checked[qi] = !wasDone;
+  hcRefreshCheckbox(id,qi);
+  hcRefreshHeader(id);
+  // Score: +2 per tick (20 checks × 2 = max 40 pts from health checks)
+  if(!wasDone){ _hs_hc = Math.min(40, _hs_hc+2); hsFlash(2,'var(--sage)'); }
+  else         { _hs_hc = Math.max(0,  _hs_hc-2); }
+  hsUpdate();
+  if(hcDone(id)){
+    HC_OPEN = -1;
+    hcClosePanel(id);
+    hcFlipReorder(hcSortedOrder());
+  }
+  hcUpdateHeader();
+};
+
+function hcBuildRow(id){
+  const item = HC_ITEMS[id];
+  const wrap = document.createElement('div');
+  wrap.dataset.hrid = id;
+  wrap.style.cssText = 'border-bottom:1px solid var(--bord);';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'hcp-hdr';
+  hdr.style.cssText = 'display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer;user-select:none;background:var(--s0);transition:background .2s;';
+  hdr.onclick = ()=>hcToggle(id);
+
+  const icon = document.createElement('div');
+  icon.className = 'hcp-icon';
+  icon.style.cssText = 'width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0;border:1px solid var(--bord);background:var(--s1);transition:all .2s;';
+  icon.textContent = item.icon;
+
+  const meta = document.createElement('div');
+  meta.style.cssText = 'flex:1;min-width:0;';
+  const titleEl = document.createElement('div');
+  titleEl.className = 'hcp-title';
+  titleEl.style.cssText = 'font-size:12.5px;font-weight:700;color:var(--text);transition:all .2s;';
+  titleEl.textContent = item.title;
+  const subEl = document.createElement('div');
+  subEl.className = 'hcp-sub';
+  subEl.innerHTML = '<span style="font-size:10.5px;color:var(--dim)">'+item.sub+'</span>';
+  meta.appendChild(titleEl); meta.appendChild(subEl);
+
+  const btn = document.createElement('button');
+  btn.className = 'hcp-btn';
+  btn.style.cssText = 'padding:8px 16px;border:none;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;background:var(--terra);color:#fff;transition:background .25s;flex-shrink:0;';
+  btn.textContent = 'Check \u2192';
+  btn.onclick = e=>{ e.stopPropagation(); hcToggle(id); };
+
+  hdr.appendChild(icon); hdr.appendChild(meta); hdr.appendChild(btn);
+
+  const panel = document.createElement('div');
+  panel.className = 'hcp-panel';
+  panel.style.cssText = 'max-height:0;overflow:hidden;transition:max-height .35s ease,opacity .3s ease;opacity:0;';
+
+  const inner = document.createElement('div');
+  inner.style.cssText = 'padding:12px 16px 14px;background:var(--s1);border-top:1px solid var(--bord);';
+
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'font-size:9px;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:.16em;margin-bottom:10px;';
+  lbl.textContent = 'Check all that apply today';
+  inner.appendChild(lbl);
+
+  item.qs.forEach((q,qi)=>{
+    const row = document.createElement('div');
+    row.dataset.hcid = id+'-'+qi;   // unique selector used by hcRefreshCheckbox
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 12px;margin-bottom:6px;border-radius:10px;cursor:pointer;border:1px solid var(--bord);background:var(--s0);transition:background .18s,border-color .18s;';
+    row.onclick = e=>{ e.stopPropagation(); hcCheck(id,qi,e); };
+
+    const tick = document.createElement('div');
+    tick.className = 'hcp-tick';
+    tick.style.cssText = 'width:18px;height:18px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--dim);background:transparent;transition:all .18s;';
+
+    const qlbl = document.createElement('span');
+    qlbl.className = 'hcp-qlbl';
+    qlbl.style.cssText = 'font-size:12px;color:var(--text);line-height:1.4;';
+    qlbl.textContent = q;
+
+    row.appendChild(tick); row.appendChild(qlbl);
+    inner.appendChild(row);
+  });
+
+  panel.appendChild(inner);
+  wrap.appendChild(hdr);
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+</script>
+</body>
+</html>
