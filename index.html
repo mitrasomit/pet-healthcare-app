@@ -1140,7 +1140,7 @@ input,textarea{font-family:var(--sans)}
 <script>
 // ─── ENVIRONMENT ──────────────────────────────────────────────────────────────
 let IS_ARTIFACT = false;
-try { IS_ARTIFACT = (window.self !== window.top); } catch(e){ IS_ARTIFACT = true; }
+try { IS_ARTIFACT = (window.self !== window.top); } catch(e){ IS_ARTIFACT = false; }
 
 // ─── APP STATE ────────────────────────────────────────────────────────────────
 let imgData          = [];
